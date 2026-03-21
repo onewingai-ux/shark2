@@ -166,6 +166,13 @@ function App() {
     setVariants(prev => prev.includes(variant) ? prev.filter(v => v !== variant) : [...prev, variant]);
   }
 
+  // Helper to calculate remaining stocks in bank
+  const getRemainingStocks = (company: string) => {
+    if (!gameState) return 0;
+    const totalOwned = gameState.players.reduce((sum: number, p: any) => sum + (p.stocks[company] || 0), 0);
+    return Math.max(0, gameState.total_stocks[company] - totalOwned);
+  };
+
   if (!ws) {
     return (
       <div className="lobby-container">
@@ -530,7 +537,10 @@ function App() {
                 <React.Fragment key={c}>
                   <div><span className={`company-${c} company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>{c}</span></div>
                   <div style={{ fontWeight: 700, fontFamily: "'Space Mono', monospace", fontSize: "1.2rem", color: "#fff" }}>${gameState.stock_price[c].toLocaleString()}</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.95rem", fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings[c]} <span style={{fontSize:"0.75rem"}}>BLDGS</span></div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings[c]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
+                    <div style={{ fontFamily: "'Space Mono', monospace", color: "#64748b" }}>{getRemainingStocks(c)} <span style={{fontSize:"0.65rem"}}>STKS</span></div>
+                  </div>
                 </React.Fragment>
               ))}
               
@@ -538,14 +548,18 @@ function App() {
                  <React.Fragment key="black">
                   <div><span className={`company-black company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>black</span></div>
                   <div style={{ color: "#475569", fontSize: "1rem", fontStyle: "italic" }}>WILD</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.95rem", fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["black"]} <span style={{fontSize:"0.75rem"}}>BLDGS</span></div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["black"]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
+                  </div>
                 </React.Fragment>
               )}
               {gameState.variants?.includes("neutral_buildings") && (
                  <React.Fragment key="gray">
                   <div><span className={`company-gray company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>gray</span></div>
                   <div style={{ color: "#475569", fontSize: "1rem", fontStyle: "italic" }}>NEUTRAL</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.95rem", fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["gray"]} <span style={{fontSize:"0.75rem"}}>BLDGS</span></div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["gray"]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
+                  </div>
                 </React.Fragment>
               )}
             </div>
