@@ -616,3 +616,15 @@ input:focus, select:focus {
 .how-to-play-content strong { color: #fff; }
 .close-button { position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; box-shadow: none; color: var(--text-muted); padding: 0.5rem; }
 .close-button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Explicit Trade Panel Input Overrides */
+.trade-controls select, .trade-controls input {
+  color: #0f172a !important;
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.trade-controls select option {
+  color: #0f172a !important;
+  background-color: #f8fafc !important;
+}
