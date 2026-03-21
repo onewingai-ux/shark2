@@ -60,7 +60,7 @@ class GameState:
         self.remaining_buildings["black"] = 6
         self.remaining_buildings["gray"] = 6
         
-        self.total_stocks: Dict[Company, int] = {c: 25 for c in COMPANIES}
+        self.total_stocks: Dict[Company, int] = {c: 50 for c in COMPANIES}
         self.game_over = False
         self.phase: Literal["trade1", "expand", "trade2", "game_over"] = "trade1"
         self.logs: List[str] = []
