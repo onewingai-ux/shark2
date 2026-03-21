@@ -141,9 +141,13 @@ function App() {
     if (gameState?.current_player !== playerId) return;
     
     let comp = gameState.current_company_die;
+    
+    // Explicitly pass wildcard if gray choose action or wildcard variants
     if (comp === "black" && !gameState.variants.includes("joker_buildings")) {
       comp = wildcardCompany;
     } else if (comp === "gray" && !gameState.variants.includes("neutral_buildings")) {
+      comp = wildcardCompany;
+    } else if (comp === "gray" && gameState.variants.includes("neutral_buildings") && grayAction === "choose") {
       comp = wildcardCompany;
     }
     

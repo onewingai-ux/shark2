@@ -64,7 +64,7 @@ class GameState:
         self.game_over = False
         self.phase: Literal["trade1", "expand", "trade2", "game_over"] = "trade1"
         self.logs: List[str] = []
-        self.log_flags: List[str] = [] # Used to pass temporary UI events to clients (e.g. "LOSS")
+        self.log_flags: List[str] = [] 
         
         self.current_company_die: Optional[str] = None
         self.current_area_die: Optional[str] = None
@@ -147,7 +147,7 @@ class GameState:
                 
             player.cash -= cost
             player.stocks[company] += count
-            self.log(f"{player.name} bought {count} {company} for ${cost}")
+            self.log(f"💰 {player.name} bought {count} {company} for ${cost}")
             self.check_game_end()
             return True, ""
             
@@ -158,14 +158,14 @@ class GameState:
             revenue = count * price
             player.cash += revenue
             player.stocks[company] -= count
-            self.log(f"{player.name} sold {count} {company} for ${revenue}")
+            self.log(f"💵 {player.name} sold {count} {company} for ${revenue}")
             return True, ""
             
         return False, "Invalid action"
 
     def roll_dice(self):
         if self.phase != "trade1": return
-        self.log_flags.clear() # Clear temporary flags
+        self.log_flags.clear() 
         
         c_die = random.choice(["red", "blue", "green", "yellow", "black", "gray"])
         a_die = random.choice(["1", "2", "3", "4", "SHARK"])
