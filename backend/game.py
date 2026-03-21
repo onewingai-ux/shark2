@@ -285,8 +285,11 @@ class GameState:
                 self.phase = "trade2"
                 return True, ""
             elif gray_action == "choose":
-                if not chosen_company or chosen_company in ["black", "gray"]:
-                    return False, "Must choose a standard company color to place instead of gray"
+                if not chosen_company or chosen_company == "gray":
+                    return False, "Must choose a non-gray company to place"
+                # If both joker and neutral variants are on, grey cannot place black
+                if "joker_buildings" in self.variants and chosen_company == "black":
+                    return False, "Gray die cannot be used to place Black Joker buildings when both variants are active"
                 comp = chosen_company # OVERRIDE the comp variable for the rest of the placement logic
             else:
                 # Place gray barrier
@@ -309,17 +312,24 @@ class GameState:
 
         # JOKER BUILDING RULE (Black)
         if comp == "black" and "joker_buildings" in self.variants:
-            adj_cells = self._get_adjacent(target_r, target_c, include_diagonal=False)
-            if any(a.company for a in adj_cells):
-                return False, "Black Joker buildings must be placed as lone buildings."
-            
-            cell.company = "black"
-            self.remaining_buildings["black"] -= 1
-            highest_price = max(self.stock_price.values()) if any(self.stock_price.values()) else 1000
-            player.cash += highest_price
-            self.log(f"🃏 {player.name} placed a Black Joker building and got ${highest_price} bonus!")
-            self.phase = "trade2"
-            return True, ""
+            if gray_action == "choose" and "neutral_buildings" in self.variants:
+                # If both Joker and Neutral variants are used, Black die can place ANY building EXCEPT grey
+                if chosen_company == "gray":
+                    return False, "Black die cannot place Gray barrier when both variants are active"
+                comp = chosen_company # OVERRIDE the comp variable, it's no longer just a black wild token
+            else:
+                # Normal Joker token placement logic
+                adj_cells = self._get_adjacent(target_r, target_c, include_diagonal=False)
+                if any(a.company for a in adj_cells):
+                    return False, "Black Joker buildings must be placed as lone buildings."
+                
+                cell.company = "black"
+                self.remaining_buildings["black"] -= 1
+                highest_price = max(self.stock_price.values()) if any(self.stock_price.values()) else 1000
+                player.cash += highest_price
+                self.log(f"🃏 {player.name} placed a Black Joker building and got ${highest_price} bonus!")
+                self.phase = "trade2"
+                return True, ""
 
         # Default wildcard fallback (if variants are OFF)
         if comp in ["black", "gray"] and not ("joker_buildings" in self.variants and comp == "black") and not ("neutral_buildings" in self.variants and comp == "gray"):
@@ -376,16 +386,18 @@ class GameState:
         
         # Pioneer Rule Check
         if "pioneer_rule" in self.variants:
-            same_color_in_area = 0
-            for r in range(12):
-                for c in range(12):
-                    if self.board[r][c].company == comp and self.board[r][c].area == cell.area:
-                        same_color_in_area += 1
-            
-            if same_color_in_area == 1:
-                player.cash += 1000
-                self.log(f"🤠 {player.name} pioneered area {cell.area} with {comp}! Bonus $1000 + EXTRA TURN!")
-                self.pioneer_extra_turn = True
+            # Special buildings (black or gray) do not trigger pioneering
+            if comp not in ["black", "gray"]:
+                same_color_in_area = 0
+                for r in range(12):
+                    for c in range(12):
+                        if self.board[r][c].company == comp and self.board[r][c].area == cell.area:
+                            same_color_in_area += 1
+                
+                if same_color_in_area == 1:
+                    player.cash += 1000
+                    self.log(f"🤠 {player.name} pioneered area {cell.area} with {comp}! Bonus $1000 + EXTRA TURN!")
+                    self.pioneer_extra_turn = True
 
         # Calculate new price
         if is_lone:

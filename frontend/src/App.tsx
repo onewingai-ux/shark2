@@ -58,7 +58,6 @@ function App() {
             
             if (Object.keys(newAnimations).length > 0) {
                 setLossAnimations(newAnimations);
-                // Clear animations after 1.5s
                 setTimeout(() => setLossAnimations({}), 1500);
             }
         }
@@ -142,13 +141,23 @@ function App() {
     
     let comp = gameState.current_company_die;
     
-    // Explicitly pass wildcard if gray choose action or wildcard variants
-    if (comp === "black" && !gameState.variants.includes("joker_buildings")) {
-      comp = wildcardCompany;
-    } else if (comp === "gray" && !gameState.variants.includes("neutral_buildings")) {
-      comp = wildcardCompany;
-    } else if (comp === "gray" && gameState.variants.includes("neutral_buildings") && grayAction === "choose") {
-      comp = wildcardCompany;
+    if (comp === "black") {
+        if (gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings")) {
+            // Black die places wildcard (but NO gray)
+            comp = wildcardCompany;
+        } else if (!gameState.variants.includes("joker_buildings")) {
+            // Standard wildcard
+            comp = wildcardCompany;
+        }
+    } else if (comp === "gray") {
+        if (gameState.variants.includes("neutral_buildings")) {
+            if (grayAction === "choose") {
+                comp = wildcardCompany;
+            }
+        } else {
+            // Standard wildcard
+            comp = wildcardCompany;
+        }
     }
     
     sendAction("expand", { row: r, col: c, company: comp, gray_action: grayAction });
@@ -256,9 +265,9 @@ function App() {
 
               <h3>Optional Variants</h3>
               <ul>
-                <li><strong>Joker (Black Die):</strong> Black buildings are wild, placed as lone buildings. Bonus = highest stock price. Once chained, they adopt that color forever and cannot be removed.</li>
-                <li><strong>Neutral (Gray Die):</strong> Grey buildings are barriers blocking expansion. When rolled, choose to place a gray barrier, remove an existing gray barrier, or place any standard company building instead.</li>
-                <li><strong>Pioneer Rule:</strong> The first building placed in a new area grants $1000 and an immediate extra turn (max 2 per turn).</li>
+                <li><strong>Joker (Black Die):</strong> Black buildings are wild, placed as lone buildings. Bonus = highest stock price. Once chained, they adopt that color forever and cannot be removed. <em>(If played with Neutral Buildings, the black die instead lets you choose any building EXCEPT gray.)</em></li>
+                <li><strong>Neutral (Gray Die):</strong> Grey buildings are barriers blocking expansion. When rolled, choose to place a gray barrier, remove an existing gray barrier, or place any standard company building instead. <em>(If played with Joker Buildings, you cannot choose to place Black.)</em></li>
+                <li><strong>Pioneer Rule:</strong> The first building placed in a new area grants $1000 and an immediate extra turn (max 2 per turn). Note: Placing a Black or Gray Special Building does not trigger this.</li>
                 <li><strong>Open Hands:</strong> You can see exactly how many stocks of each color your opponents hold.</li>
               </ul>
             </div>
@@ -278,6 +287,22 @@ function App() {
     if (company === "gray") return "company-gray";
     return `company-${company}`;
   };
+
+  // Determine wildcard dropdown options based on variant rules
+  let wildcardOptions = [...COMPANIES];
+  if (gameState.current_company_die === "black" && gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings")) {
+      // Black die when both variants active -> any EXCEPT gray
+      // (Which is just the standard companies + black, but black is handled natively or implicitly. 
+      // The rules say "any building except grey". Since we handle standard companies in the dropdown:)
+      wildcardOptions = [...COMPANIES]; // Red, blue, green, yellow
+  } else if (gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings")) {
+       // Gray die when Neutral is active, choosing standard -> any EXCEPT black
+       wildcardOptions = [...COMPANIES]; 
+  } else {
+      // Standard wildcards can pick standard colors
+      wildcardOptions = [...COMPANIES];
+  }
+
 
   return (
     <div className="container">
@@ -381,8 +406,17 @@ function App() {
                 {gameState.current_company_die === "black" && !gameState.variants.includes("joker_buildings") && (
                    <div style={{ marginBottom: "1rem" }}>
                     <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%" }}>
-                      {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                    </select>
+                  </div>
+                )}
+                
+                {gameState.current_company_die === "black" && gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings") && (
+                   <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose ANY building except gray: </label>
+                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                     </select>
                   </div>
                 )}
@@ -390,14 +424,14 @@ function App() {
                 {gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings") && (
                    <div style={{ marginBottom: "1rem" }}>
                     <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Neutral Action: </label>
-                    <select value={grayAction} onChange={e => setGrayAction(e.target.value)} style={{ width: "100%", marginBottom: "0.75rem" }}>
+                    <select value={grayAction} onChange={e => setGrayAction(e.target.value)} style={{ width: "100%", marginBottom: "0.75rem", background: "white", color: "var(--text-main)" }}>
                       <option value="place">Place Gray Barrier</option>
                       <option value="remove">Remove Gray Barrier</option>
                       <option value="choose">Place any standard Company building</option>
                     </select>
                     {grayAction === "choose" && (
-                        <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%" }}>
-                          {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                        <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                          {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                         </select>
                     )}
                   </div>
@@ -406,14 +440,14 @@ function App() {
                 {gameState.current_company_die === "gray" && !gameState.variants.includes("neutral_buildings") && (
                    <div style={{ marginBottom: "1rem" }}>
                     <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%" }}>
-                      {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                     </select>
                   </div>
                 )}
                 
                 <div style={{ fontSize: "0.95em", color: "#94a3b8", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontWeight: 600 }}>
-                  <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to build.
+                  <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to proceed.
                 </div>
               </div>
             )}
@@ -443,7 +477,7 @@ function App() {
                     </div>
                     
                     <div className="trade-controls" style={{ marginBottom: "1.5rem" }}>
-                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2 }}>
+                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2, background: "white", color: "var(--text-main)" }}>
                         {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()} (${gameState.stock_price[c].toLocaleString()})</option>)}
                       </select>
                       <input 
@@ -451,7 +485,7 @@ function App() {
                         min="1" max="5" 
                         value={tradeCount} 
                         onChange={e => setTradeCount(Number(e.target.value))} 
-                        style={{ width: "80px", textAlign: "center" }}
+                        style={{ width: "80px", textAlign: "center", background: "white", color: "var(--text-main)" }}
                       />
                     </div>
                     
