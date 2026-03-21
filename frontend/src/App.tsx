@@ -13,12 +13,15 @@ function App() {
   const [errorMsg, setErrorMsg] = useState("");
   
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const [variants, setVariants] = useState<string[]>(["open_hands"]); // Default to open hands
+  const [variants, setVariants] = useState<string[]>(["open_hands"]); 
 
   const [tradeCompany, setTradeCompany] = useState("red");
   const [tradeCount, setTradeCount] = useState(1);
   const [wildcardCompany, setWildcardCompany] = useState("red");
   const [grayAction, setGrayAction] = useState("place");
+  
+  // Animation tracking
+  const [lossAnimations, setLossAnimations] = useState<Record<string, boolean>>({});
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -41,7 +44,26 @@ function App() {
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "state") {
-        setGameState(data.state);
+        const newState = data.state;
+        
+        // Check for loss animations
+        if (newState.log_flags && newState.log_flags.length > 0) {
+            const newAnimations: Record<string, boolean> = {};
+            newState.log_flags.forEach((flag: string) => {
+                if (flag.startsWith("LOSS_") || flag.startsWith("BANKRUPT_")) {
+                    const id = flag.split("_")[1];
+                    newAnimations[id] = true;
+                }
+            });
+            
+            if (Object.keys(newAnimations).length > 0) {
+                setLossAnimations(newAnimations);
+                // Clear animations after 1.5s
+                setTimeout(() => setLossAnimations({}), 1500);
+            }
+        }
+        
+        setGameState(newState);
         setErrorMsg("");
       } else if (data.type === "error") {
         setErrorMsg(data.message);
@@ -393,7 +415,7 @@ function App() {
             )}
 
             {isMyTurn && gameState.status === "playing" && (
-              <div className="panel-section" style={{ marginTop: "1rem", padding: "1rem" }}>
+              <div className="panel-section" style={{ marginTop: "1rem", padding: "1.25rem" }}>
                 <div style={{ display: "flex", gap: "1rem" }}>
                   {gameState.phase === "trade1" && (
                     <button onClick={() => sendAction("roll")} style={{ flex: 1, padding: "1rem", fontSize: "1.1rem" }}>
@@ -493,7 +515,7 @@ function App() {
           <div className="panel-section">
             <h3>Players</h3>
             {gameState.players.map((p: any) => (
-              <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""}`}>
+              <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""} ${lossAnimations[p.id] ? "loss-animation" : ""}`}>
                 <div className="player-header">
                   <div className="player-name" style={{ display: "flex", alignItems: "center" }}>
                     {p.name} 

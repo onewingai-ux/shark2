@@ -42,7 +42,7 @@ body {
 header {
   background: rgba(15, 23, 42, 0.8);
   backdrop-filter: blur(12px);
-  padding: 1.5rem 2rem;
+  padding: 1rem 2rem;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -52,7 +52,7 @@ header {
 
 header h2 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.05em;
   color: #fff;
@@ -77,8 +77,8 @@ header h2 {
   display: flex;
   flex: 1;
   overflow: hidden;
-  padding: 2rem;
-  gap: 2.5rem;
+  padding: 1.5rem;
+  gap: 2rem;
 }
 
 /* ----- BOARD STYLING (Tabletop feel) ----- */
@@ -90,9 +90,10 @@ header h2 {
   background: url('https://www.transparenttextures.com/patterns/dark-matter.png') repeat, #1e293b;
   border-radius: 16px;
   box-shadow: inset 0 0 100px rgba(0,0,0,0.8), var(--shadow);
-  padding: 3rem;
+  padding: 2rem;
   border: 2px solid #020617;
   position: relative;
+  min-height: 0; /* Important for flex child */
 }
 
 .board-container::after {
@@ -113,16 +114,17 @@ header h2 {
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
   border: 1px solid #334155;
+  width: 100%;
+  max-width: 650px;
+  aspect-ratio: 1; /* Keep it square */
 }
 
 .cell {
-  width: 50px;
-  height: 50px;
   display: flex;
   justify-content: center;
   align-items: center;
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: clamp(1rem, 2vw, 1.5rem);
   font-family: 'Space Mono', monospace;
   cursor: pointer;
   user-select: none;
@@ -137,12 +139,11 @@ header h2 {
   z-index: 5;
 }
 
-/* Zone colors (Dark, muted themes) */
+/* Zone colors */
 .area-1 { background: #1e293b; color: #475569; }
 .area-2 { background: #243046; color: #475569; }
 .area-3 { background: #2c3951; color: #475569; }
 .area-4 { background: #334155; color: #64748b; }
-
 .area-shark { 
   background: #000; 
   color: transparent; 
@@ -151,14 +152,12 @@ header h2 {
 }
 .area-shark::after {
   content: '🦈';
-  font-size: 1.5rem;
+  font-size: clamp(1rem, 2vw, 1.5rem);
   color: #fff;
   opacity: 0.15;
   position: absolute;
 }
-.area-shark:hover::after {
-  opacity: 0.8;
-}
+.area-shark:hover::after { opacity: 0.8; }
 
 /* Tokens (Premium 3D look) */
 .cell[class*="company-"] {
@@ -169,7 +168,7 @@ header h2 {
     0 6px 8px rgba(0,0,0,0.5), 
     inset 0 3px 6px rgba(255,255,255,0.4), 
     inset 0 -5px 10px rgba(0,0,0,0.6);
-  color: transparent !important; /* Hide the text inside tokens for a cleaner look */
+  color: transparent !important;
   position: relative;
 }
 
@@ -195,14 +194,10 @@ header h2 {
 .company-green { background: radial-gradient(circle at 30% 30%, #86efac, var(--green), #14532d) !important; }
 .company-yellow { background: radial-gradient(circle at 30% 30%, #fef08a, var(--yellow), #713f12) !important; }
 
-/* The Black Joker token on Shark Zone needs to be distinct */
 .company-black { 
   background: radial-gradient(circle at 30% 30%, #64748b, #1e293b, #000) !important; 
-  border: 2px solid rgba(255,255,255,0.5) !important; /* Stark white border for contrast against black/shark spaces */
-  box-shadow: 
-    0 6px 8px rgba(0,0,0,0.8), 
-    inset 0 2px 4px rgba(255,255,255,0.3), 
-    0 0 15px rgba(255,255,255,0.1) !important; /* Subtle outer glow */
+  border: 2px solid rgba(255,255,255,0.5) !important; 
+  box-shadow: 0 6px 8px rgba(0,0,0,0.8), inset 0 2px 4px rgba(255,255,255,0.3), 0 0 15px rgba(255,255,255,0.1) !important;
 }
 
 .company-gray { 
@@ -210,19 +205,17 @@ header h2 {
   border: 2px solid #334155 !important;
 }
 
-/* UI Badges (For sidebar) */
 .company-badge {
-  padding: 0.25rem 0.75rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
 }
-
 .company-badge.company-yellow { color: #422006; text-shadow: none; }
 .company-badge.company-gray { color: #0f172a; text-shadow: none; }
 .company-badge.company-black { border: 1px solid #fff; }
@@ -233,7 +226,7 @@ header h2 {
   min-width: 400px;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   overflow-y: auto;
   padding-right: 0.5rem;
 }
@@ -245,15 +238,15 @@ header h2 {
 .panel-section {
   background: var(--surface);
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   border: 1px solid var(--border);
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);
 }
 
 .panel-section h3 {
   margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.15rem;
   color: #fff;
   display: flex;
   align-items: center;
@@ -267,11 +260,11 @@ button {
   background: var(--primary);
   color: white;
   border: none;
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-family: inherit;
   transition: all 0.2s;
   display: flex;
@@ -300,13 +293,13 @@ button:disabled {
 
 /* Forms and Inputs */
 input, select {
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: #0f172a;
   color: #fff;
   font-family: 'Space Mono', monospace;
-  font-size: 1rem;
+  font-size: 0.95rem;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -317,9 +310,9 @@ input:focus, select:focus {
 
 /* Status Banners */
 .status-banner {
-  padding: 1.25rem;
+  padding: 1rem;
   border-radius: 8px;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -336,7 +329,7 @@ input:focus, select:focus {
 .trade-panel {
   background: #0f172a;
   border: 1px solid var(--border);
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: 8px;
 }
 
@@ -355,7 +348,7 @@ input:focus, select:focus {
 .market-grid {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
 }
 .market-header {
@@ -364,14 +357,14 @@ input:focus, select:focus {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--border);
 }
 
 /* Player Cards */
 .player-card {
-  margin-bottom: 1rem;
-  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  padding: 1rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #0f172a;
@@ -384,7 +377,6 @@ input:focus, select:focus {
   border-color: var(--primary);
   background: rgba(217, 119, 6, 0.05);
 }
-
 .player-card.active-turn::before {
   content: '';
   position: absolute;
@@ -393,16 +385,28 @@ input:focus, select:focus {
   background: var(--primary);
 }
 
+/* Loss Animation Class */
+@keyframes lossFlash {
+  0% { background: #0f172a; border-color: var(--border); }
+  10% { background: rgba(239, 68, 68, 0.4); border-color: #ef4444; transform: scale(1.02); }
+  50% { background: rgba(239, 68, 68, 0.2); transform: scale(1); }
+  100% { background: #0f172a; border-color: var(--border); }
+}
+
+.player-card.loss-animation {
+  animation: lossFlash 1.5s ease-out;
+}
+
 .player-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .player-name {
   font-weight: 800;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   color: #fff;
 }
 
@@ -410,13 +414,14 @@ input:focus, select:focus {
   background: rgba(34, 197, 94, 0.1);
   color: #4ade80;
   border: 1px solid rgba(34, 197, 94, 0.2);
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 9999px;
   font-weight: 700;
   font-family: 'Space Mono', monospace;
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  font-size: 0.9rem;
 }
 
 .portfolio {
@@ -428,33 +433,30 @@ input:focus, select:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 4px;
   font-weight: 800;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-family: 'Space Mono', monospace;
   background: #1e293b;
   color: #475569;
   border: 1px solid #334155;
 }
 
-.portfolio-item[class*="company-"] {
-  border: none;
-}
+.portfolio-item[class*="company-"] { border: none; }
 
-/* Bot tag */
 .bot-tag {
   background: var(--primary);
   color: white;
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  font-size: 0.7rem;
-  margin-left: 0.75rem;
+  font-size: 0.65rem;
+  margin-left: 0.5rem;
   vertical-align: middle;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   font-weight: 800;
   letter-spacing: 0.05em;
 }
@@ -464,19 +466,19 @@ input:focus, select:focus {
   flex: 1;
   overflow-y: auto;
   font-family: 'Space Mono', monospace;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   background: #020617;
   color: #94a3b8;
-  padding: 1rem;
+  padding: 0.75rem;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   border: 1px solid #1e293b;
 }
 
 .log-entry {
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
   border-bottom: 1px dashed #1e293b;
   line-height: 1.4;
 }
@@ -609,47 +611,10 @@ input:focus, select:focus {
   box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
 }
 
-.how-to-play-content h2 {
-  margin-top: 0;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 2rem;
-  color: #fff;
-}
-
-.how-to-play-content h3 {
-  color: var(--primary);
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.how-to-play-content ul {
-  padding-left: 1.5rem;
-  color: #cbd5e1;
-}
-
-.how-to-play-content li {
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-}
-
-.how-to-play-content strong {
-  color: #fff;
-}
-
-.close-button {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  padding: 0.5rem;
-}
-.close-button:hover {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-}
+.how-to-play-content h2 { margin-top: 0; padding-bottom: 1rem; border-bottom: 1px solid var(--border); font-size: 2rem; color: #fff; }
+.how-to-play-content h3 { color: var(--primary); margin-top: 2rem; margin-bottom: 1rem; font-size: 1.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.how-to-play-content ul { padding-left: 1.5rem; color: #cbd5e1; }
+.how-to-play-content li { margin-bottom: 0.75rem; line-height: 1.6; }
+.how-to-play-content strong { color: #fff; }
+.close-button { position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; box-shadow: none; color: var(--text-muted); padding: 0.5rem; }
+.close-button:hover { background: rgba(255,255,255,0.1); color: #fff; }
