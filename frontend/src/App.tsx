@@ -30,6 +30,14 @@ function App() {
       if (wsRef.current) wsRef.current.close();
     };
   }, []);
+  
+  useEffect(() => {
+    if (gameState?.room_id) {
+        document.title = `Shark [${gameState.room_id}]`;
+    } else {
+        document.title = "Shark";
+    }
+  }, [gameState?.room_id]);
 
   const connectWs = (room: string, player: string) => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
