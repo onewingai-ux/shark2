@@ -22,6 +22,8 @@ app = FastAPI()
 # In-memory store
 rooms: Dict[str, GameState] = {}
 connections: Dict[str, List[WebSocket]] = {}
+# Lock for bot execution to prevent double-spawning tasks
+bot_locks: Dict[str, bool] = {}
 
 class JoinRequest(BaseModel):
     room_id: str
@@ -43,6 +45,7 @@ async def join_room(room_id: str, req: JoinRequest):
     if room_id not in rooms:
         rooms[room_id] = GameState(room_id)
         connections[room_id] = []
+        bot_locks[room_id] = False
         
     game = rooms[room_id]
     game.add_player(req.player_id, req.player_name)
@@ -73,6 +76,7 @@ async def create_room(req: CreateRoomRequest):
     room_id = str(uuid.uuid4())[:6].upper()
     rooms[room_id] = GameState(room_id, variants=req.variants)
     connections[room_id] = []
+    bot_locks[room_id] = False
     return {"room_id": room_id, "variants": req.variants}
 
 async def broadcast_state(room_id: str):
@@ -94,33 +98,37 @@ async def broadcast_state(room_id: str):
         connections[room_id].remove(ws)
 
 async def run_bot_turn(room_id: str):
+    if bot_locks.get(room_id, False):
+        return # Prevent duplicate bot loops
+        
+    bot_locks[room_id] = True
     try:
-        print(f"[{room_id}] Triggering bot turn sequence...")
         if room_id not in rooms: return
         game = rooms[room_id]
         
         player = game.current_player()
         if not player or getattr(player, 'is_bot', False) == False or not game.is_playing:
-            print(f"[{room_id}] Aborting bot turn: Not a bot or game over.")
             return
             
-        await asyncio.sleep(1.5) # Give UI a moment
+        await asyncio.sleep(1.0)
         
+        # In case human ended turn super fast while task queued
+        player = game.current_player()
+        if not getattr(player, 'is_bot', False):
+            return
+
         if game.phase == "trade1":
-            print(f"[{room_id}] Bot {player.name} starting trade1 phase.")
             action, comp, count = get_best_trade(game, player)
             if action:
                 game.trade(player.id, action, comp, count)
                 await broadcast_state(room_id)
                 await asyncio.sleep(1.0)
                 
-            print(f"[{room_id}] Bot {player.name} rolling dice.")
             game.roll_dice()
             await broadcast_state(room_id)
             await asyncio.sleep(2.0)
             
         if game.phase == "expand":
-            print(f"[{room_id}] Bot {player.name} starting expand phase.")
             r, c, comp = get_best_expansion_move(game, player, game.current_company_die, game.current_area_die)
             if r != -1 and c != -1:
                 game.expand(player.id, r, c, comp, "choose" if comp in COMPANIES else "place")
@@ -131,26 +139,27 @@ async def run_bot_turn(room_id: str):
             await asyncio.sleep(1.0)
             
         if game.phase == "trade2":
-            print(f"[{room_id}] Bot {player.name} starting trade2 phase.")
             action, comp, count = get_best_trade(game, player)
             if action:
                 game.trade(player.id, action, comp, count)
                 await broadcast_state(room_id)
                 await asyncio.sleep(1.0)
                 
-            print(f"[{room_id}] Bot {player.name} ending turn.")
             success, _ = game.end_turn(player.id)
             if success:
                 await broadcast_state(room_id)
                 
                 next_p = game.current_player()
-                print(f"[{room_id}] Next player is {next_p.name} (is_bot: {getattr(next_p, 'is_bot', False)})")
                 if next_p and getattr(next_p, 'is_bot', False) and game.is_playing:
-                    await asyncio.sleep(1.0)
+                    # Release lock so the scheduled task can run
+                    bot_locks[room_id] = False
+                    await asyncio.sleep(0.5)
                     asyncio.create_task(run_bot_turn(room_id))
     except Exception as e:
         print(f"[{room_id}] CRITICAL BOT ERROR:")
         traceback.print_exc()
+    finally:
+        bot_locks[room_id] = False
 
 @app.websocket("/ws/{room_id}/{player_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
@@ -177,6 +186,12 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
                     continue
                     
                 game = rooms[room_id]
+                
+                # Verify that actions are only taken by the current player
+                # (Prevents race conditions where an old click triggers during bot turns)
+                if action != "start" and player_id != game.current_player().id:
+                    continue
+                    
                 success, error = False, ""
                 
                 if action == "start":
