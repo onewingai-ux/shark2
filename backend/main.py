@@ -1,150 +1,131 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict, List
+import asyncio
 import json
 import uuid
-import asyncio
+import os
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from typing import Dict, Any, List
+from pydantic import BaseModel
 
-from game import GameEngine, ANIMALS
+from game import GameState, COMPANIES
 
 app = FastAPI()
 
-# Enable CORS for the frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# In-memory store
+rooms: Dict[str, GameState] = {}
+connections: Dict[str, List[WebSocket]] = {}
 
-class ConnectionManager:
-    def __init__(self):
-        # Maps room_id to list of active websockets
-        self.active_connections: Dict[str, List[WebSocket]] = {}
-        # Maps room_id to GameEngine
-        self.games: Dict[str, GameEngine] = {}
-        # Maps websocket to (room_id, player_id)
-        self.client_info: Dict[WebSocket, tuple[str, str]] = {}
+class JoinRequest(BaseModel):
+    room_id: str
+    player_id: str
+    player_name: str
 
-    async def connect(self, websocket: WebSocket, room_id: str, player_id: str, player_name: str):
-        await websocket.accept()
+class ActionRequest(BaseModel):
+    room_id: str
+    player_id: str
+    action: str
+    data: Dict[str, Any]
+
+@app.post("/api/rooms/{room_id}/join")
+async def join_room(room_id: str, req: JoinRequest):
+    room_id = room_id.upper()
+    if room_id not in rooms:
+        rooms[room_id] = GameState(room_id)
+        connections[room_id] = []
         
-        if room_id not in self.games:
-            self.games[room_id] = GameEngine()
-            self.active_connections[room_id] = []
-            
-        game = self.games[room_id]
-        
-        # Add player if not exists, or update connection status
-        player = game.get_player(player_id)
-        if not player:
-            success = game.add_player(player_id, player_name)
-            if not success:
-                await websocket.send_json({"type": "error", "message": "Cannot join room."})
-                await websocket.close()
-                return
-        else:
-            player.connected = True
-            player.name = player_name # Update name if changed
-            
-        self.active_connections[room_id].append(websocket)
-        self.client_info[websocket] = (room_id, player_id)
-        
-        await self.broadcast_game_state(room_id)
+    game = rooms[room_id]
+    game.add_player(req.player_id, req.player_name)
+    return {"status": "ok", "room_id": room_id, "player_id": req.player_id}
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.client_info:
-            room_id, player_id = self.client_info[websocket]
-            if room_id in self.active_connections:
-                if websocket in self.active_connections[room_id]:
-                    self.active_connections[room_id].remove(websocket)
-            
-            game = self.games.get(room_id)
-            if game:
-                player = game.get_player(player_id)
-                if player:
-                    player.connected = False
-            
-            del self.client_info[websocket]
-            return room_id
-        return None
+@app.post("/api/rooms/create")
+async def create_room():
+    room_id = str(uuid.uuid4())[:6].upper()
+    rooms[room_id] = GameState(room_id)
+    connections[room_id] = []
+    return {"room_id": room_id}
 
-    async def broadcast_game_state(self, room_id: str):
-        if room_id not in self.active_connections or room_id not in self.games:
-            return
-            
-        game = self.games[room_id]
-        websockets_to_remove = []
+async def broadcast_state(room_id: str):
+    if room_id not in connections or room_id not in rooms:
+        return
         
-        for websocket in self.active_connections[room_id]:
-            if websocket in self.client_info:
-                _, player_id = self.client_info[websocket]
-                state = game.get_public_state(player_id)
-                try:
-                    await websocket.send_json({"type": "game_state", "state": state})
-                except Exception:
-                    websockets_to_remove.append(websocket)
-                    
-        for ws in websockets_to_remove:
-            self.disconnect(ws)
-
-manager = ConnectionManager()
+    game = rooms[room_id]
+    disconnected = []
+    
+    for ws in connections[room_id]:
+        try:
+            state = game.get_client_state("")
+            await ws.send_json({"type": "state", "state": state})
+        except Exception as e:
+            disconnected.append(ws)
+            
+    for ws in disconnected:
+        connections[room_id].remove(ws)
 
 @app.websocket("/ws/{room_id}/{player_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str, name: str = "Player"):
-    await manager.connect(websocket, room_id, player_id, name)
+async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
+    await websocket.accept()
+    room_id = room_id.upper()
+    
+    if room_id not in connections:
+        connections[room_id] = []
+    connections[room_id].append(websocket)
+    
+    if room_id in rooms:
+        await broadcast_state(room_id)
+        
     try:
         while True:
             data = await websocket.receive_text()
-            message = json.loads(data)
+            msg = json.loads(data)
             
-            game = manager.games.get(room_id)
-            if not game:
-                continue
+            if msg.get("type") == "action":
+                action = msg.get("action")
+                payload = msg.get("data", {})
                 
-            action = message.get("action")
-            
-            if action == "start_game":
-                game.start_game()
-                await manager.broadcast_game_state(room_id)
-                
-            elif action == "play_card":
-                card_index = message.get("card_index")
-                if card_index is not None:
-                    success = game.play_card(player_id, card_index)
-                    if success:
-                        await manager.broadcast_game_state(room_id)
-                    else:
-                        await websocket.send_json({"type": "error", "message": "Invalid move: play_card"})
-                        
-            elif action == "take_token":
-                animal = message.get("animal")
-                if animal in ANIMALS:
-                    success = game.take_token(player_id, animal)
-                    if success:
-                        await manager.broadcast_game_state(room_id)
-                    else:
-                        await websocket.send_json({"type": "error", "message": "Invalid move: take_token"})
-                        
-            elif action == "next_round":
-                # Ensure only starting player or any player can trigger next round? Let's allow any for simplicity.
-                success = game.next_round()
-                if success:
-                    await manager.broadcast_game_state(room_id)
-                else:
-                    await websocket.send_json({"type": "error", "message": "Cannot start next round"})
+                if room_id not in rooms:
+                    continue
                     
+                game = rooms[room_id]
+                success, error = False, ""
+                
+                if action == "start":
+                    success = game.start_game()
+                    if not success: error = "Need more players"
+                elif action == "roll":
+                    game.roll_dice()
+                    success = True
+                elif action == "trade":
+                    success, error = game.trade(
+                        player_id,
+                        payload.get("trade_type"),
+                        payload.get("company"),
+                        payload.get("count", 1)
+                    )
+                elif action == "expand":
+                    success, error = game.expand(
+                        player_id,
+                        payload.get("row"),
+                        payload.get("col"),
+                        payload.get("company")
+                    )
+                elif action == "end_turn":
+                    success, error = game.end_turn(player_id)
+                    
+                if error:
+                    await websocket.send_json({"type": "error", "message": error})
+                    
+                await broadcast_state(room_id)
+                
     except WebSocketDisconnect:
-        room_id = manager.disconnect(websocket)
-        if room_id:
-            await manager.broadcast_game_state(room_id)
-    except Exception as e:
-        print(f"Error: {e}")
-        room_id = manager.disconnect(websocket)
-        if room_id:
-            await manager.broadcast_game_state(room_id)
+        if room_id in connections and websocket in connections[room_id]:
+            connections[room_id].remove(websocket)
 
-@app.get("/api/health")
-async def health_check():
-    return {"status": "ok"}
+# Try locating the dist folder correctly whether running locally or in Docker
+dist_path = os.path.join(os.path.dirname(__file__), "..", "dist")
+
+if os.path.exists(dist_path):
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="frontend")
+else:
+    # Fallback to current working directory 'dist'
+    app.mount("/", StaticFiles(directory="dist", html=True), name="frontend")
