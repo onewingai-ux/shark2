@@ -13,11 +13,12 @@ function App() {
   const [errorMsg, setErrorMsg] = useState("");
   
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const [variants, setVariants] = useState<string[]>([]);
+  const [variants, setVariants] = useState<string[]>(["short_game"]); // Default to short_game
 
   const [tradeCompany, setTradeCompany] = useState("red");
   const [tradeCount, setTradeCount] = useState(1);
   const [wildcardCompany, setWildcardCompany] = useState("red");
+  const [grayAction, setGrayAction] = useState("place");
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -118,11 +119,13 @@ function App() {
     if (gameState?.current_player !== playerId) return;
     
     let comp = gameState.current_company_die;
-    if (comp === "black" || comp === "gray") {
+    if (comp === "black" && !gameState.variants.includes("joker_buildings")) {
+      comp = wildcardCompany;
+    } else if (comp === "gray" && !gameState.variants.includes("neutral_buildings")) {
       comp = wildcardCompany;
     }
     
-    sendAction("expand", { row: r, col: c, company: comp });
+    sendAction("expand", { row: r, col: c, company: comp, gray_action: grayAction });
   };
   
   const toggleVariant = (variant: string) => {
@@ -148,17 +151,29 @@ function App() {
               <HelpCircle size={18} /> How to Play
             </button>
             
-            <div className="variant-selection" style={{ background: "transparent", border: "1px solid #cbd5e1" }}>
+            <div className="variant-selection" style={{ background: "transparent", border: "1px solid #cbd5e1", maxHeight: "150px", overflowY: "auto" }}>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <Settings size={14} /> GAME OPTIONS
+                <Settings size={14} /> GAME VARIANTS
               </div>
-               <label className="variant-label">
-                <input type="checkbox" checked={variants.includes("open_hands")} onChange={() => toggleVariant("open_hands")} />
-                Open Hands (Everyone sees exact stock counts)
-              </label>
-              <label className="variant-label">
+              <label className="variant-label" title="End game when a stock hits $10,000 instead of $15,000">
                 <input type="checkbox" checked={variants.includes("short_game")} onChange={() => toggleVariant("short_game")} />
-                Short Game (Ends at $10,000 instead of $15,000)
+                Short Game (End at $10k)
+              </label>
+              <label className="variant-label" title="Black die places a wild Joker building">
+                <input type="checkbox" checked={variants.includes("joker_buildings")} onChange={() => toggleVariant("joker_buildings")} />
+                Joker Buildings (Black Die)
+              </label>
+              <label className="variant-label" title="Gray die places/removes a blocking Neutral building">
+                <input type="checkbox" checked={variants.includes("neutral_buildings")} onChange={() => toggleVariant("neutral_buildings")} />
+                Neutral Buildings (Gray Die)
+              </label>
+              <label className="variant-label" title="Pioneering a new area grants an extra turn">
+                <input type="checkbox" checked={variants.includes("pioneer_rule")} onChange={() => toggleVariant("pioneer_rule")} />
+                Pioneer Rule
+              </label>
+              <label className="variant-label" title="See exact stock counts of opponents">
+                <input type="checkbox" checked={variants.includes("open_hands")} onChange={() => toggleVariant("open_hands")} />
+                Open Hands
               </label>
             </div>
             
@@ -198,23 +213,24 @@ function App() {
 
               <h3>Turn Structure</h3>
               <ul>
-                <li><strong>Trade (Optional):</strong> Buy up to 5 stocks (total across all companies) and/or sell any number of stocks. Stocks must be ≥ $1,000 to trade.</li>
-                <li><strong>Expand (Mandatory):</strong> Roll the Company and Area dice. Place a building of the rolled company color onto an empty cell in the rolled area. (Black/Gray dies are wildcards).</li>
+                <li><strong>Trade (Optional):</strong> Buy up to 5 stocks total and/or sell any number. Stocks must be ≥ $1,000 to trade.</li>
+                <li><strong>Expand (Mandatory):</strong> Roll the Company and Area dice. Place a building of the rolled company onto an empty cell in the rolled area.</li>
                 <li><strong>Trade Again (Optional):</strong> You can buy/sell again, observing the 5-stock buy limit for the whole turn.</li>
               </ul>
               
               <h3>Placing Buildings</h3>
               <ul>
                 <li><strong>Lone Building:</strong> Placing a building not orthogonally adjacent to any other buildings grants you a $1,000 bonus.</li>
-                <li><strong>Chains:</strong> Placing a building adjacent to others of the SAME color forms a chain. The stock price becomes $1,000 × (number of buildings in chain). You get a cash bonus equal to the new stock price!</li>
-                <li><strong>Hostile Takeover:</strong> You can place adjacent to an OPPOSING company's building ONLY IF your newly formed chain is strictly larger than the opposing chain. You destroy the opposing buildings, dropping their stock price!</li>
+                <li><strong>Chains:</strong> Placing adjacent to others of the SAME color forms a chain. The stock price becomes $1,000 × (buildings in chain). You get a cash bonus equal to the new stock price!</li>
+                <li><strong>Hostile Takeover:</strong> You can place adjacent to an OPPOSING company ONLY IF your newly formed chain is strictly larger than the opposing chain. You destroy the opposing buildings, dropping their stock price!</li>
               </ul>
-              
-              <h3>Dividends & Losses</h3>
-              <p>Whenever a company's stock price goes UP, everyone holding that stock gets paid the difference in cash. When it goes DOWN (due to a takeover), everyone (except the current player) pays the difference! If you can't pay, you must sell stocks at half price or go bankrupt.</p>
-              
-              <h3>Game End</h3>
-              <p>The game ends when any stock reaches $15,000, all buildings of a company are used, or all stocks of all companies are bought.</p>
+
+              <h3>Optional Variants</h3>
+              <ul>
+                <li><strong>Joker (Black Die):</strong> Black buildings are wild, placed as lone buildings. Bonus = highest stock price. Once chained, they adopt that color forever and cannot be removed.</li>
+                <li><strong>Neutral (Gray Die):</strong> Grey buildings are barriers blocking expansion. When rolled, choose to place a gray barrier, remove an existing gray barrier, or place any standard company building instead.</li>
+                <li><strong>Pioneer Rule:</strong> The first building placed in a new area grants $1000 and an immediate extra turn (max 2 per turn).</li>
+              </ul>
             </div>
           </div>
         )}
@@ -226,6 +242,12 @@ function App() {
 
   const isMyTurn = gameState.current_player === playerId;
   const me = gameState.players.find((p: any) => p.id === playerId);
+
+  const getCompanyColorClasses = (company: string) => {
+    if (company === "black") return "company-black";
+    if (company === "gray") return "company-gray";
+    return `company-${company}`;
+  };
 
   return (
     <div className="container">
@@ -242,7 +264,7 @@ function App() {
                 <div
                   key={`${r}-${c}`}
                   className={`cell area-${cell.area.toLowerCase()} ${
-                    cell.company ? `company-${cell.company}` : ""
+                    cell.company ? getCompanyColorClasses(cell.company) : ""
                   }`}
                   onClick={() => handleCellClick(r, c)}
                   title={`Area: ${cell.area} | Row ${r+1}, Col ${c+1}`}
@@ -299,43 +321,59 @@ function App() {
                 </div>
               </div>
             )}
-
-            {gameState.status === "game_over" && (
-              <div className="status-banner status-gameover">
-                <AlertCircle size={24} />
-                <div>
-                  <strong>Game Over!</strong>
-                  <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>Check the logs to see who won.</div>
-                </div>
-              </div>
-            )}
             
             {isMyTurn && gameState.phase === "expand" && (
               <div className="panel-section" style={{ border: "2px solid var(--primary)", background: "#eff6ff" }}>
                 <h3 style={{ marginBottom: "0.5rem", borderBottom: "none", color: "var(--primary)" }}>Expand Territory</h3>
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
                   <div style={{ background: "#fff", padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #bfdbfe", textAlign: "center", flex: 1 }}>
-                    <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Company</div>
-                    <div style={{ fontWeight: 700, fontSize: "1.1rem", textTransform: "capitalize", margin: "auto", display: "inline-block", padding: "0 0.5rem" }} className={['black', 'gray'].includes(gameState.current_company_die) ? '' : `company-${gameState.current_company_die} company-badge`}>
+                    <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Company Die</div>
+                    <div style={{ fontWeight: 700, fontSize: "1.1rem", textTransform: "capitalize", margin: "auto", display: "inline-block", padding: "0 0.5rem" }} className={`company-badge ${getCompanyColorClasses(gameState.current_company_die)}`}>
                       {gameState.current_company_die}
                     </div>
                   </div>
                   <div style={{ background: "#fff", padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #bfdbfe", textAlign: "center", flex: 1 }}>
-                    <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Area</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Area Die</div>
                     <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{gameState.current_area_die === "SHARK" ? "🦈" : gameState.current_area_die}</div>
                   </div>
                 </div>
 
-                {(gameState.current_company_die === "black" || gameState.current_company_die === "gray") && (
-                  <div style={{ marginBottom: "1rem" }}>
+                {gameState.current_company_die === "black" && !gameState.variants.includes("joker_buildings") && (
+                   <div style={{ marginBottom: "1rem" }}>
                     <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.25rem" }}>Choose Wildcard Company: </label>
                     <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
                       {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                     </select>
                   </div>
                 )}
+                
+                {gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings") && (
+                   <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.25rem" }}>Neutral Action: </label>
+                    <select value={grayAction} onChange={e => setGrayAction(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)", marginBottom: "0.5rem" }}>
+                      <option value="place">Place Gray Barrier</option>
+                      <option value="remove">Remove Gray Barrier</option>
+                      <option value="choose">Place any standard Company building</option>
+                    </select>
+                    {grayAction === "choose" && (
+                        <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                          {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                        </select>
+                    )}
+                  </div>
+                )}
+                
+                {gameState.current_company_die === "gray" && !gameState.variants.includes("neutral_buildings") && (
+                   <div style={{ marginBottom: "1rem" }}>
+                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.25rem" }}>Choose Wildcard Company: </label>
+                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                      {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                    </select>
+                  </div>
+                )}
+                
                 <div style={{ fontSize: "0.9em", color: "#475569", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <ArrowRightCircle size={16} /> Click an empty cell on the board to build.
+                  <ArrowRightCircle size={16} /> Click a valid cell on the board to proceed.
                 </div>
               </div>
             )}
@@ -420,6 +458,21 @@ function App() {
                   <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>{gameState.remaining_buildings[c]} / 18 bldgs</div>
                 </React.Fragment>
               ))}
+              
+              {gameState.variants?.includes("joker_buildings") && (
+                 <React.Fragment key="black">
+                  <div><span className={`company-black company-badge`} style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center', color: "white", background: "#000" }}>black</span></div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>N/A</div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>{gameState.remaining_buildings["black"]} / 6 bldgs</div>
+                </React.Fragment>
+              )}
+              {gameState.variants?.includes("neutral_buildings") && (
+                 <React.Fragment key="gray">
+                  <div><span className={`company-gray company-badge`} style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center', color: "black", background: "#cbd5e1" }}>gray</span></div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>N/A</div>
+                  <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>{gameState.remaining_buildings["gray"]} / 6 bldgs</div>
+                </React.Fragment>
+              )}
             </div>
           </div>
 

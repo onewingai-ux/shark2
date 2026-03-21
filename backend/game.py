@@ -2,7 +2,7 @@ import random
 from typing import Literal, List, Dict, Optional, Any, Tuple
 from pydantic import BaseModel
 
-Company = Literal["red", "blue", "green", "yellow"]
+Company = Literal["red", "blue", "green", "yellow", "black", "gray"]
 Area = Literal["1", "2", "3", "4", "SHARK"]
 
 BOARD_LAYOUT: List[str] = [
@@ -57,6 +57,9 @@ class GameState:
         self.board: List[List[Cell]] = create_initial_board()
         self.stock_price: Dict[Company, int] = {c: 0 for c in COMPANIES}
         self.remaining_buildings: Dict[Company, int] = {c: 18 for c in COMPANIES}
+        self.remaining_buildings["black"] = 6 # Arbitrary small number of Joker buildings
+        self.remaining_buildings["gray"] = 6  # Arbitrary small number of Neutral buildings
+        
         self.total_stocks: Dict[Company, int] = {c: 25 for c in COMPANIES}
         self.game_over = False
         self.phase: Literal["trade1", "expand", "trade2", "game_over"] = "trade1"
@@ -64,6 +67,7 @@ class GameState:
         
         self.current_company_die: Optional[str] = None
         self.current_area_die: Optional[str] = None
+        self.pioneer_extra_turn = False
 
     def get_player(self, player_id: str) -> Optional[Player]:
         for p in self.players:
@@ -84,9 +88,12 @@ class GameState:
         self.board = create_initial_board()
         self.stock_price = {c: 0 for c in COMPANIES}
         self.remaining_buildings = {c: 18 for c in COMPANIES}
+        self.remaining_buildings["black"] = 6
+        self.remaining_buildings["gray"] = 6
         self.game_over = False
         self.phase = "trade1"
         self.logs = ["Game started!"]
+        self.pioneer_extra_turn = False
         
         return True
 
@@ -112,6 +119,9 @@ class GameState:
             
         if self.phase == "expand":
             return False, "Must expand first"
+
+        if company not in COMPANIES:
+            return False, "Invalid company to trade"
 
         price = self.stock_price[company]
         if price < 1000:
@@ -149,7 +159,6 @@ class GameState:
         return False, "Invalid action"
 
     def roll_dice(self):
-        """Rolls the dice for the current player's expansion phase"""
         if self.phase != "trade1": return
         
         c_die = random.choice(["red", "blue", "green", "yellow", "black", "gray"])
@@ -173,11 +182,19 @@ class GameState:
         return adj
         
     def _get_chain(self, start_r: int, start_c: int) -> List[Cell]:
-        """Returns list of cells in orthogonal chain of the same company."""
         cell = self.board[start_r][start_c]
         if not cell.company: return []
         
         comp = cell.company
+        
+        # In Joker rule, black buildings act as the color they are chained to, but only AFTER being chained.
+        # But _get_chain finds the contiguous orthogonal group of the SAME color.
+        # So black buildings will initially be isolated, and then during hostile takeovers or chaining, 
+        # they merge. This requires specific black-building matching logic.
+        
+        # If "joker_buildings" variant is on, black can act as any color once touching it. 
+        # To simplify, we treat "black" as part of the adjacent color chain during calculation.
+        
         chain = []
         visited = set()
         queue = [(start_r, start_c)]
@@ -188,11 +205,15 @@ class GameState:
             visited.add((r, c))
             
             curr = self.board[r][c]
-            if curr.company == comp:
+            
+            # If variant is on, a black building is considered part of ANY color chain it touches 
+            # (or it adopts that color).
+            if curr.company == comp or ("joker_buildings" in self.variants and curr.company == "black"):
                 chain.append(curr)
                 for adj in self._get_adjacent(r, c, include_diagonal=False):
-                    if adj.company == comp and (adj.row, adj.col) not in visited:
-                        queue.append((adj.row, adj.col))
+                    if adj.company == comp or ("joker_buildings" in self.variants and adj.company == "black"):
+                        if (adj.row, adj.col) not in visited:
+                            queue.append((adj.row, adj.col))
                         
         return chain
 
@@ -223,15 +244,12 @@ class GameState:
         p.cash -= amount # temporarily negative
         self.log(f"{p.name} must sell stocks to cover ${-p.cash} loss")
         
-        # Forced sell
         while p.cash < 0:
-            # Sell highest priced stock first that can give cash
             best_comp = None
             best_val = 0
             for comp in COMPANIES:
                 if p.stocks[comp] > 0:
                     price = self.stock_price[comp]
-                    # Half price rounded down to 1000s
                     sell_price = (price // 2000) * 1000
                     if sell_price > best_val:
                         best_val = sell_price
@@ -248,7 +266,7 @@ class GameState:
             p.cash += best_val
             self.log(f"{p.name} forced to sell 1 {best_comp} for ${best_val}")
             
-    def expand(self, player_id: str, target_r: int, target_c: int, chosen_company: Optional[Company] = None) -> Tuple[bool, str]:
+    def expand(self, player_id: str, target_r: int, target_c: int, chosen_company: Optional[Company] = None, gray_action: str = "place") -> Tuple[bool, str]:
         if not self.is_playing or self.game_over: return False, "Game not active"
         if self.phase != "expand": return False, "Not expansion phase"
         player = self.get_player(player_id)
@@ -258,6 +276,32 @@ class GameState:
             return False, "Invalid cell"
 
         cell = self.board[target_r][target_c]
+        
+        comp = self.current_company_die
+
+        # NEUTRAL BUILDING RULE
+        if comp == "gray" and "neutral_buildings" in self.variants:
+            if gray_action == "remove":
+                if cell.company != "gray": return False, "Can only remove gray buildings"
+                cell.company = None
+                self.remaining_buildings["gray"] += 1
+                self.log(f"{player.name} removed a Gray barrier at {target_r},{target_c}")
+                self.phase = "trade2"
+                return True, ""
+            elif gray_action == "choose":
+                # Fall through to normal placement logic but use the chosen company
+                if not chosen_company or chosen_company in ["black", "gray"]:
+                    return False, "Must choose a standard company color to place instead of gray"
+                comp = chosen_company
+            else:
+                # Place gray barrier
+                if cell.company is not None: return False, "Cell not empty"
+                cell.company = "gray"
+                self.remaining_buildings["gray"] -= 1
+                self.log(f"{player.name} placed a Gray barrier at {target_r},{target_c}")
+                self.phase = "trade2"
+                return True, ""
+
         if cell.company is not None:
             return False, "Cell not empty"
 
@@ -268,13 +312,27 @@ class GameState:
             if cell.area != self.current_area_die:
                 return False, f"Must place in area {self.current_area_die}"
 
-        # Validate company
-        comp = self.current_company_die
-        if comp in ["black", "gray"]:
+        # JOKER BUILDING RULE (Black)
+        if comp == "black" and "joker_buildings" in self.variants:
+            # Must be placed as a lone building
+            adj_cells = self._get_adjacent(target_r, target_c, include_diagonal=False)
+            if any(a.company for a in adj_cells):
+                return False, "Black Joker buildings must be placed as lone buildings."
+            
+            cell.company = "black"
+            self.remaining_buildings["black"] -= 1
+            highest_price = max(self.stock_price.values()) if any(self.stock_price.values()) else 1000
+            player.cash += highest_price
+            self.log(f"🃏 {player.name} placed a Black Joker building and got ${highest_price} bonus!")
+            self.phase = "trade2"
+            return True, ""
+
+        # Default wildcard fallback (if variants are OFF)
+        if comp in ["black", "gray"] and not ("joker_buildings" in self.variants and comp == "black") and not ("neutral_buildings" in self.variants and comp == "gray"):
             if not chosen_company:
                 return False, "Must choose a company for wildcard die"
             comp = chosen_company
-        elif chosen_company and chosen_company != comp:
+        elif chosen_company and chosen_company != comp and comp not in ["black", "gray"]:
             return False, f"Die is {comp}, cannot choose {chosen_company}"
 
         if self.remaining_buildings[comp] <= 0: # type: ignore
@@ -286,28 +344,30 @@ class GameState:
         is_adjacent_same = False
         
         for adj in adj_cells:
+            # Gray barriers block everything and cannot form chains
+            if adj.company == "gray":
+                continue
+                
             if adj.company and adj.company != comp:
+                # Black acts as the opposing color if it's already touching them
                 opp_chain = self._get_chain(adj.row, adj.col)
                 if opp_chain not in opposing_chains:
                     opposing_chains.append(opp_chain)
-            elif adj.company == comp:
+            elif adj.company == comp or ("joker_buildings" in self.variants and adj.company == "black"):
                 is_adjacent_same = True
 
         # Hostile Takeover check
         is_takeover = len(opposing_chains) > 0
         
         if is_takeover:
-            # Must be creating or extending a chain
             if not is_adjacent_same:
                 return False, "Hostile takeover requires orthogonal connection to your own company"
             
-            # Predict new chain length
             temp_chain_len = 1
             for adj in adj_cells:
-                if adj.company == comp:
+                if adj.company == comp or ("joker_buildings" in self.variants and adj.company == "black"):
                     temp_chain_len += len(self._get_chain(adj.row, adj.col))
                     
-            # Must be strictly greater than EACH adjacent opposing chain
             for opp_chain in opposing_chains:
                 if temp_chain_len <= len(opp_chain):
                     return False, "Hostile takeover failed: chain not strictly larger than opposing chain"
@@ -322,6 +382,20 @@ class GameState:
         is_lone = not is_adjacent_same and not is_takeover
         new_chain = self._get_chain(target_r, target_c)
         
+        # Pioneer Rule Check
+        if "pioneer_rule" in self.variants:
+            # Is this the ONLY building of this color in this area?
+            same_color_in_area = 0
+            for r in range(12):
+                for c in range(12):
+                    if self.board[r][c].company == comp and self.board[r][c].area == cell.area:
+                        same_color_in_area += 1
+            
+            if same_color_in_area == 1: # Just the one we placed
+                player.cash += 1000
+                self.log(f"🤠 {player.name} pioneered area {cell.area} with {comp}! Bonus $1000 + EXTRA TURN!")
+                self.pioneer_extra_turn = True
+
         # Calculate new price
         if is_lone:
             player.cash += 1000
@@ -338,27 +412,32 @@ class GameState:
         if is_takeover:
             removed = {c: 0 for c in COMPANIES}
             for adj in adj_cells:
-                if adj.company and adj.company != comp:
-                    # Remove the whole chain + lone buildings orthogonal
+                if adj.company and adj.company != comp and adj.company != "gray":
                     chain_to_remove = self._get_chain(adj.row, adj.col)
                     if not chain_to_remove: # Lone
                         adj_comp = adj.company
-                        self.board[adj.row][adj.col].company = None
-                        self.remaining_buildings[adj_comp] += 1
-                        self.log(f"Removed lone {adj_comp} at {adj.row},{adj.col}")
+                        if adj_comp == "black" and "joker_buildings" in self.variants:
+                            # Black is immune to removal
+                            removed["black"] = removed.get("black", 0) + 1
+                        else:
+                            self.board[adj.row][adj.col].company = None
+                            self.remaining_buildings[adj_comp] += 1
+                            self.log(f"Removed lone {adj_comp} at {adj.row},{adj.col}")
                     else:
                         adj_comp = chain_to_remove[0].company
                         for rc in chain_to_remove:
-                            rc.company = None
-                            self.remaining_buildings[adj_comp] += 1
-                            removed[adj_comp] += 1
-                            self.log(f"Removed {adj_comp} at {rc.row},{rc.col}")
+                            if rc.company == "black" and "joker_buildings" in self.variants:
+                                # Immune to removal but counts for stock drop
+                                removed[adj_comp] += 1
+                            else:
+                                rc.company = None
+                                self.remaining_buildings[adj_comp] += 1
+                                removed[adj_comp] += 1
+                                self.log(f"Removed {adj_comp} at {rc.row},{rc.col}")
                             
-            # Reduce prices for removed chain buildings
             for c in COMPANIES:
                 if removed[c] > 0:
                     self.stock_price[c] -= removed[c] * 1000
-                    # Check floor
                     has_building = any(cell.company == c for row in self.board for cell in row)
                     if has_building and self.stock_price[c] < 1000:
                         self.stock_price[c] = 1000
@@ -378,6 +457,12 @@ class GameState:
         
         player = self.get_player(player_id)
         if player != self.current_player(): return False, "Not your turn"
+
+        if self.pioneer_extra_turn:
+            self.pioneer_extra_turn = False
+            self.phase = "trade1"
+            self.log(f"{player.name} takes their PIONEER extra turn!")
+            return True, ""
 
         # Next player
         for _ in range(len(self.players)):
@@ -420,7 +505,6 @@ class GameState:
             self.is_playing = False
             self.log(f"Game Over! {reason}")
             
-            # Compute wealth
             for p in self.players:
                 wealth = p.cash + sum(p.stocks[c] * self.stock_price[c] for c in COMPANIES)
                 self.log(f"{p.name} total wealth: ${wealth}")
