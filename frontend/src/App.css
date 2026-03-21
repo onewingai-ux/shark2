@@ -628,3 +628,10 @@ input:focus, select:focus {
   color: #0f172a !important;
   background-color: #f8fafc !important;
 }
+
+/* Explicitly force ALL dropdowns and options globally on dark mode to be legible */
+select, option {
+  color: #0f172a !important;
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
