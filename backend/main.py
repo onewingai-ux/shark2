@@ -8,7 +8,10 @@ from fastapi.responses import HTMLResponse
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
-from game import GameState, COMPANIES
+try:
+    from game import GameState, COMPANIES
+except ImportError:
+    from backend.game import GameState, COMPANIES
 
 app = FastAPI()
 
@@ -126,6 +129,9 @@ dist_path = os.path.join(os.path.dirname(__file__), "..", "dist")
 
 if os.path.exists(dist_path):
     app.mount("/", StaticFiles(directory=dist_path, html=True), name="frontend")
-else:
+elif os.path.exists("dist"):
     # Fallback to current working directory 'dist'
     app.mount("/", StaticFiles(directory="dist", html=True), name="frontend")
+elif os.path.exists("/app/dist"):
+    # Inside Docker
+    app.mount("/", StaticFiles(directory="/app/dist", html=True), name="frontend")
