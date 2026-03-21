@@ -105,12 +105,13 @@ class GameState:
         return self.players[self.current_turn_index]
 
     def log(self, msg: str, flag: str = None):
-        self.logs.append(msg)
+        # Insert at index 0 so newest is always first when mapped in UI directly
+        self.logs.insert(0, msg)
         if flag:
             self.log_flags.append(flag)
             
         if len(self.logs) > 30:
-            self.logs = self.logs[-30:]
+            self.logs = self.logs[:30]
         if len(self.log_flags) > 10:
             self.log_flags = self.log_flags[-10:]
 
@@ -219,6 +220,43 @@ class GameState:
                         
         return chain
 
+    def _calculate_global_price(self, company: str) -> int:
+        """
+        In Shark, the share price of a company is the sum of all its groups of connected buildings 
+        that are size 2 or larger, times 1,000.
+        A lone, isolated building (size 1) is worth 0 and does not count toward the price sum.
+        However, if there is ANY building of that company on the board, the absolute minimum floor is $1000.
+        If there are NO buildings of that company, the price is $0.
+        """
+        all_cells = [(r, c) for r in range(12) for c in range(12) 
+                     if self.board[r][c].company == company or ("joker_buildings" in self.variants and self.board[r][c].company == "black")]
+                     
+        if not all_cells:
+            return 0
+            
+        visited_global = set()
+        sum_of_qualifying_chains = 0
+        
+        for r, c in all_cells:
+            if (r, c) in visited_global:
+                continue
+            chain = self._get_chain(r, c)
+            for ch_cell in chain:
+                visited_global.add((ch_cell.row, ch_cell.col))
+                
+            if len(chain) >= 2:
+                sum_of_qualifying_chains += len(chain)
+                
+        price = sum_of_qualifying_chains * 1000
+        
+        # Floor logic: if price is 0 (i.e. only lone buildings exist) but buildings are on the board, it becomes 1000
+        has_actual_company_building = any(self.board[r][c].company == company for r in range(12) for c in range(12))
+        
+        if price == 0 and has_actual_company_building:
+            return 1000
+            
+        return price
+
     def _apply_dividends_and_losses(self, old_prices: Dict[Company, int], new_prices: Dict[Company, int]):
         curr_p = self.current_player()
         for comp in COMPANIES:
@@ -295,7 +333,7 @@ class GameState:
                     return False, "Must choose a non-gray company to place"
                 if "joker_buildings" in self.variants and chosen_company == "black":
                     return False, "Gray die cannot be used to place Black Joker buildings when both variants are active"
-                comp = chosen_company
+                comp = chosen_company 
             else:
                 if cell.company is not None: return False, "Cell not empty"
                 cell.company = "gray"
@@ -331,6 +369,8 @@ class GameState:
                 player.cash += highest_price
                 self.log(f"🃏 {player.name} placed a Black Joker building and got ${highest_price} bonus!")
                 self.phase = "trade2"
+                
+                # Prices change because black is wild and might merge later, but it shouldn't trigger here as it is lone.
                 return True, ""
 
         if comp in ["black", "gray"] and not ("joker_buildings" in self.variants and comp == "black") and not ("neutral_buildings" in self.variants and comp == "gray"):
@@ -383,7 +423,6 @@ class GameState:
         self.log(f"🏗️ {player.name} placed {comp} at {target_r},{target_c}")
 
         is_lone = not is_adjacent_same and not is_takeover
-        new_chain = self._get_chain(target_r, target_c)
         
         # Pioneer Rule Check
         if "pioneer_rule" in self.variants:
@@ -399,19 +438,16 @@ class GameState:
                     self.log(f"🤠 {player.name} pioneered area {cell.area} with {comp}! Bonus $1000 + EXTRA TURN!")
                     self.pioneer_extra_turn = True
 
-        # Calculate new price
+        # Calculate player placement bonuses
         if is_lone:
             player.cash += 1000
             self.log(f"🏢 {player.name} got $1000 bonus for lone building")
-            if self.stock_price[comp] == 0: # type: ignore
-                self.stock_price[comp] = 1000 # type: ignore
         else:
-            price = len(new_chain) * 1000
-            self.stock_price[comp] = price # type: ignore
-            player.cash += price
-            self.log(f"🏙️ {player.name} got ${price} bonus for building chain")
+            # We calculate the new price specifically for the chain they touched to give them their placement bonus
+            # (which is equal to the NEW stock price of that specific company globally, not just that chain)
+            pass
 
-        # Resolve Hostile Takeover Removals
+        # Resolve Hostile Takeover Removals BEFORE global price recalculation
         if is_takeover:
             self.log(f"🚨 HOSTILE TAKEOVER INITIATED BY {player.name}!", flag="TAKEOVER")
             removed = {c: 0 for c in COMPANIES}
@@ -436,15 +472,15 @@ class GameState:
                                 self.remaining_buildings[adj_comp] += 1
                                 removed[adj_comp] += 1
                                 self.log(f"💥 Removed {adj_comp} at {rc.row},{rc.col}")
-                            
-            for c in COMPANIES:
-                if removed[c] > 0:
-                    self.stock_price[c] -= removed[c] * 1000
-                    has_building = any(cell.company == c for row in self.board for cell in row)
-                    if has_building and self.stock_price[c] < 1000:
-                        self.stock_price[c] = 1000
-                    elif not has_building:
-                        self.stock_price[c] = 0
+
+        # Recalculate ALL stock prices based on the new board state
+        for c in COMPANIES:
+            self.stock_price[c] = self._calculate_global_price(c)
+            
+        # Distribute placement bonus to the player AFTER prices update, ONLY if they formed a chain
+        if not is_lone:
+            player.cash += self.stock_price[comp]
+            self.log(f"🏙️ {player.name} got ${self.stock_price[comp]} bonus for building chain")
 
         self._apply_dividends_and_losses(old_prices, self.stock_price)
         
@@ -463,7 +499,7 @@ class GameState:
         if self.pioneer_extra_turn:
             self.pioneer_extra_turn = False
             self.phase = "trade1"
-            self.current_turn_purchases = 0 # reset for the new turn
+            self.current_turn_purchases = 0 
             self.log(f"⏩ {player.name} takes their PIONEER extra turn!")
             return True, ""
 
@@ -473,7 +509,7 @@ class GameState:
                 break
                 
         self.phase = "trade1"
-        self.current_turn_purchases = 0 # reset for the new turn
+        self.current_turn_purchases = 0 
         self.log(f"⏱️ Turn passed to {self.current_player().name}")
         self.log_flags.clear()
         return True, ""
