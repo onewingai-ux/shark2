@@ -58,6 +58,7 @@ function App() {
             
             if (Object.keys(newAnimations).length > 0) {
                 setLossAnimations(newAnimations);
+                // Clear animations after 1.5s
                 setTimeout(() => setLossAnimations({}), 1500);
             }
         }
@@ -141,23 +142,13 @@ function App() {
     
     let comp = gameState.current_company_die;
     
-    if (comp === "black") {
-        if (gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings")) {
-            // Black die places wildcard (but NO gray)
-            comp = wildcardCompany;
-        } else if (!gameState.variants.includes("joker_buildings")) {
-            // Standard wildcard
-            comp = wildcardCompany;
-        }
-    } else if (comp === "gray") {
-        if (gameState.variants.includes("neutral_buildings")) {
-            if (grayAction === "choose") {
-                comp = wildcardCompany;
-            }
-        } else {
-            // Standard wildcard
-            comp = wildcardCompany;
-        }
+    // Explicitly pass wildcard if gray choose action or wildcard variants
+    if (comp === "black" && !gameState.variants.includes("joker_buildings")) {
+      comp = wildcardCompany;
+    } else if (comp === "gray" && !gameState.variants.includes("neutral_buildings")) {
+      comp = wildcardCompany;
+    } else if (comp === "gray" && gameState.variants.includes("neutral_buildings") && grayAction === "choose") {
+      comp = wildcardCompany;
     }
     
     sendAction("expand", { row: r, col: c, company: comp, gray_action: grayAction });
@@ -281,6 +272,7 @@ function App() {
 
   const isMyTurn = gameState.current_player === playerId;
   const me = gameState.players.find((p: any) => p.id === playerId);
+  const remainingBuys = Math.max(0, 5 - (gameState.current_turn_purchases || 0));
 
   const getCompanyColorClasses = (company: string) => {
     if (company === "black") return "company-black";
@@ -291,15 +283,10 @@ function App() {
   // Determine wildcard dropdown options based on variant rules
   let wildcardOptions = [...COMPANIES];
   if (gameState.current_company_die === "black" && gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings")) {
-      // Black die when both variants active -> any EXCEPT gray
-      // (Which is just the standard companies + black, but black is handled natively or implicitly. 
-      // The rules say "any building except grey". Since we handle standard companies in the dropdown:)
-      wildcardOptions = [...COMPANIES]; // Red, blue, green, yellow
+      wildcardOptions = [...COMPANIES]; 
   } else if (gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings")) {
-       // Gray die when Neutral is active, choosing standard -> any EXCEPT black
        wildcardOptions = [...COMPANIES]; 
   } else {
-      // Standard wildcards can pick standard colors
       wildcardOptions = [...COMPANIES];
   }
 
@@ -447,7 +434,7 @@ function App() {
                 )}
                 
                 <div style={{ fontSize: "0.95em", color: "#94a3b8", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontWeight: 600 }}>
-                  <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to proceed.
+                  <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to build.
                 </div>
               </div>
             )}
@@ -476,17 +463,22 @@ function App() {
                       </div>
                     </div>
                     
-                    <div className="trade-controls" style={{ marginBottom: "1.5rem" }}>
+                    <div className="trade-controls" style={{ marginBottom: "0.5rem" }}>
                       <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2, background: "white", color: "var(--text-main)" }}>
                         {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()} (${gameState.stock_price[c].toLocaleString()})</option>)}
                       </select>
                       <input 
                         type="number" 
-                        min="1" max="5" 
+                        min="1" 
+                        max={Math.max(1, remainingBuys)} 
                         value={tradeCount} 
-                        onChange={e => setTradeCount(Number(e.target.value))} 
+                        onChange={e => setTradeCount(Math.min(remainingBuys, Math.max(1, Number(e.target.value))))} 
                         style={{ width: "80px", textAlign: "center", background: "white", color: "var(--text-main)" }}
                       />
+                    </div>
+
+                    <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginBottom: "1rem", textAlign: "right" }}>
+                        Remaining buys this turn: {remainingBuys}
                     </div>
                     
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "1rem", marginBottom: "1.5rem", padding: "1rem", background: "#020617", borderRadius: "8px", border: "1px dashed #334155" }}>
@@ -499,7 +491,8 @@ function App() {
                         className="trade-btn-buy" 
                         onClick={() => sendAction("trade", { trade_type: "buy", company: tradeCompany, count: tradeCount })} 
                         style={{ flex: 1, padding: "1rem" }}
-                        disabled={me.cash < gameState.stock_price[tradeCompany] * tradeCount}
+                        disabled={remainingBuys === 0 || me.cash < gameState.stock_price[tradeCompany] * tradeCount}
+                        title={remainingBuys === 0 ? "You have reached your 5-share purchase limit for this turn." : ""}
                       >
                         <ArrowDownCircle size={20} /> BUY STOCKS
                       </button>

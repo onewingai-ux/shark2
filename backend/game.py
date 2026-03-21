@@ -69,6 +69,7 @@ class GameState:
         self.current_company_die: Optional[str] = None
         self.current_area_die: Optional[str] = None
         self.pioneer_extra_turn = False
+        self.current_turn_purchases = 0
 
     def get_player(self, player_id: str) -> Optional[Player]:
         for p in self.players:
@@ -95,6 +96,7 @@ class GameState:
         self.phase = "trade1"
         self.logs = ["Game started!"]
         self.pioneer_extra_turn = False
+        self.current_turn_purchases = 0
         
         return True
 
@@ -137,6 +139,9 @@ class GameState:
             return False, "Must trade positive amount"
 
         if action == "buy":
+            if self.current_turn_purchases + count > 5:
+                return False, f"You can only buy a maximum of 5 shares per turn (You have already bought {self.current_turn_purchases})."
+                
             cost = count * price
             if player.cash < cost:
                 return False, f"Not enough cash (need ${cost}, have ${player.cash})"
@@ -147,6 +152,7 @@ class GameState:
                 
             player.cash -= cost
             player.stocks[company] += count
+            self.current_turn_purchases += count
             self.log(f"💰 {player.name} bought {count} {company} for ${cost}")
             self.check_game_end()
             return True, ""
@@ -287,12 +293,10 @@ class GameState:
             elif gray_action == "choose":
                 if not chosen_company or chosen_company == "gray":
                     return False, "Must choose a non-gray company to place"
-                # If both joker and neutral variants are on, grey cannot place black
                 if "joker_buildings" in self.variants and chosen_company == "black":
                     return False, "Gray die cannot be used to place Black Joker buildings when both variants are active"
-                comp = chosen_company # OVERRIDE the comp variable for the rest of the placement logic
+                comp = chosen_company
             else:
-                # Place gray barrier
                 if cell.company is not None: return False, "Cell not empty"
                 cell.company = "gray"
                 self.remaining_buildings["gray"] -= 1
@@ -313,12 +317,10 @@ class GameState:
         # JOKER BUILDING RULE (Black)
         if comp == "black" and "joker_buildings" in self.variants:
             if gray_action == "choose" and "neutral_buildings" in self.variants:
-                # If both Joker and Neutral variants are used, Black die can place ANY building EXCEPT grey
                 if chosen_company == "gray":
                     return False, "Black die cannot place Gray barrier when both variants are active"
-                comp = chosen_company # OVERRIDE the comp variable, it's no longer just a black wild token
+                comp = chosen_company
             else:
-                # Normal Joker token placement logic
                 adj_cells = self._get_adjacent(target_r, target_c, include_diagonal=False)
                 if any(a.company for a in adj_cells):
                     return False, "Black Joker buildings must be placed as lone buildings."
@@ -331,7 +333,6 @@ class GameState:
                 self.phase = "trade2"
                 return True, ""
 
-        # Default wildcard fallback (if variants are OFF)
         if comp in ["black", "gray"] and not ("joker_buildings" in self.variants and comp == "black") and not ("neutral_buildings" in self.variants and comp == "gray"):
             if not chosen_company:
                 return False, "Must choose a company for wildcard die"
@@ -386,7 +387,6 @@ class GameState:
         
         # Pioneer Rule Check
         if "pioneer_rule" in self.variants:
-            # Special buildings (black or gray) do not trigger pioneering
             if comp not in ["black", "gray"]:
                 same_color_in_area = 0
                 for r in range(12):
@@ -463,6 +463,7 @@ class GameState:
         if self.pioneer_extra_turn:
             self.pioneer_extra_turn = False
             self.phase = "trade1"
+            self.current_turn_purchases = 0 # reset for the new turn
             self.log(f"⏩ {player.name} takes their PIONEER extra turn!")
             return True, ""
 
@@ -472,6 +473,7 @@ class GameState:
                 break
                 
         self.phase = "trade1"
+        self.current_turn_purchases = 0 # reset for the new turn
         self.log(f"⏱️ Turn passed to {self.current_player().name}")
         self.log_flags.clear()
         return True, ""
@@ -527,5 +529,6 @@ class GameState:
             "my_id": player_id,
             "current_company_die": self.current_company_die,
             "current_area_die": self.current_area_die,
-            "variants": self.variants
+            "variants": self.variants,
+            "current_turn_purchases": self.current_turn_purchases
         }
