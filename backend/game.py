@@ -21,7 +21,6 @@ BOARD_LAYOUT: List[str] = [
 ]
 
 COMPANIES = ["red", "blue", "green", "yellow"]
-MAX_STOCK_PRICE = 10000
 
 class Cell(BaseModel):
     row: int
@@ -394,39 +393,6 @@ class GameState:
         end = False
         reason = ""
         for c in COMPANIES:
-            if self.stock_price[c] >= 10000:
-                if "short_game" in self.variants:
-                if self.stock_price[c] >= 10000:
-                    end = True
-                    reason = f"{c} hit $10,000"
-            else:
-                if self.stock_price[c] >= 15000:
-                    end = True
-                    reason = f"{c} hit $15,000"
-                reason = f"{c} hit $15,000"
-            if self.remaining_buildings[c] == 0:
-                if "short_game" in self.variants:
-                if self.stock_price[c] >= 10000:
-                    end = True
-                    reason = f"{c} hit $10,000"
-            else:
-                if self.stock_price[c] >= 15000:
-                    end = True
-                    reason = f"{c} hit $15,000"
-                reason = f"All {c} buildings used"
-            if sum(p.stocks[c] for p in self.players) == self.total_stocks[c]:
-                if "short_game" in self.variants:
-                if self.stock_price[c] >= 10000:
-                    end = True
-                    reason = f"{c} hit $10,000"
-            else:
-                if self.stock_price[c] >= 15000:
-                    end = True
-                    reason = f"{c} hit $15,000"
-                reason = f"All {c} stocks bought"
-                
-        active_players = [p for p in self.players if not p.bankrupt]
-        if len(active_players) <= 1:
             if "short_game" in self.variants:
                 if self.stock_price[c] >= 10000:
                     end = True
@@ -435,6 +401,17 @@ class GameState:
                 if self.stock_price[c] >= 15000:
                     end = True
                     reason = f"{c} hit $15,000"
+                    
+            if self.remaining_buildings[c] == 0:
+                end = True
+                reason = f"All {c} buildings used"
+            if sum(p.stocks[c] for p in self.players) == self.total_stocks[c]:
+                end = True
+                reason = f"All {c} stocks bought"
+                
+        active_players = [p for p in self.players if not p.bankrupt]
+        if len(active_players) <= 1:
+            end = True
             reason = "All other players bankrupt"
 
         if end:
@@ -462,5 +439,6 @@ class GameState:
             "logs": self.logs,
             "my_id": player_id,
             "current_company_die": self.current_company_die,
-            "current_area_die": self.current_area_die
+            "current_area_die": self.current_area_die,
+            "variants": self.variants
         }
