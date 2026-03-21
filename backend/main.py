@@ -111,35 +111,11 @@ async def run_bot_turn(room_id: str):
         await asyncio.sleep(1.5) # Bot is "thinking" about placement
         
     if game.phase == "expand":
-        # Bot expansion heuristics
-        comp_die = game.current_company_die
-        area_die = game.current_area_die
-        
-        # Simple heuristic expansion logic (without crashing from get_best_expansion_move issues)
-        # 1. Gather valid spaces
-        valid_moves = []
-        for r in range(12):
-            for c in range(12):
-                cell = game.board[r][c]
-                if cell.company is None:
-                    if (area_die == "SHARK" and cell.area == "SHARK") or (area_die != "SHARK" and cell.area == area_die):
-                        valid_moves.append((r, c))
-        
-        placed = False
-        if valid_moves:
-            comps = [comp_die] if comp_die not in ["black", "gray"] else [c for c in COMPANIES if game.remaining_buildings[c] > 0]
-            
-            # 1. Try extending chains or creating lone (heuristics implicitly handled by game rules on try)
-            for r, c in valid_moves:
-                for comp in comps:
-                    success, _ = game.expand(player.id, r, c, comp)
-                    if success:
-                        placed = True
-                        break
-                if placed: break
-                        
-        if not placed:
-            # Force skip if blocked
+        # Let the AI heuristics dictate placement
+        r, c, comp = get_best_expansion_move(game, player, game.current_company_die, game.current_area_die)
+        if r != -1 and c != -1:
+            game.expand(player.id, r, c, comp)
+        else:
             game.phase = "trade2"
             
         await broadcast_state(room_id)

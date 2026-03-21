@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, HandCoins, Bot } from "lucide-react";
+import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import "./App.css";
 
 const COMPANIES = ["red", "blue", "green", "yellow"];
@@ -164,6 +164,7 @@ function App() {
   if (!gameState) return <div className="lobby-container"><div className="lobby-card">Loading Game State...</div></div>;
 
   const isMyTurn = gameState.current_player === playerId;
+  const me = gameState.players.find((p: any) => p.id === playerId);
 
   return (
     <div className="container">
@@ -288,27 +289,49 @@ function App() {
                   )}
                 </div>
 
-                {(gameState.phase === "trade1" || gameState.phase === "trade2") && (
-                  <div className="trade-panel">
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.5rem" }}>TRADE DESK</div>
-                    <div className="trade-controls">
-                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2 }}>
-                        {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                {(gameState.phase === "trade1" || gameState.phase === "trade2") && me && (
+                  <div className="trade-panel" style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.05em" }}>TRADE DESK</div>
+                      <div className="cash-badge" style={{ fontSize: "0.9rem" }}>
+                        <DollarSign size={14} /> Available Cash: {me.cash.toLocaleString()}
+                      </div>
+                    </div>
+                    
+                    <div className="trade-controls" style={{ marginBottom: "1rem" }}>
+                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2, background: "white" }}>
+                        {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()} (${gameState.stock_price[c].toLocaleString()})</option>)}
                       </select>
                       <input 
                         type="number" 
                         min="1" max="5" 
                         value={tradeCount} 
                         onChange={e => setTradeCount(Number(e.target.value))} 
-                        style={{ width: "60px", textAlign: "center" }}
+                        style={{ width: "70px", textAlign: "center", background: "white" }}
                       />
                     </div>
-                    <div className="trade-controls" style={{ marginTop: "0.5rem" }}>
-                      <button className="trade-btn-buy" onClick={() => sendAction("trade", { trade_type: "buy", company: tradeCompany, count: tradeCount })} style={{ flex: 1 }}>
-                        <HandCoins size={16} /> Buy
+                    
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.9rem", marginBottom: "1rem", padding: "0.5rem", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
+                      <span style={{ color: "#64748b" }}>Transaction Value:</span>
+                      <strong style={{ fontSize: "1.1rem", color: "#0f172a" }}>${(gameState.stock_price[tradeCompany] * tradeCount).toLocaleString()}</strong>
+                    </div>
+
+                    <div className="trade-controls">
+                      <button 
+                        className="trade-btn-buy" 
+                        onClick={() => sendAction("trade", { trade_type: "buy", company: tradeCompany, count: tradeCount })} 
+                        style={{ flex: 1 }}
+                        disabled={me.cash < gameState.stock_price[tradeCompany] * tradeCount}
+                      >
+                        <ArrowDownCircle size={16} /> Buy
                       </button>
-                      <button className="trade-btn-sell" onClick={() => sendAction("trade", { trade_type: "sell", company: tradeCompany, count: tradeCount })} style={{ flex: 1 }}>
-                        <DollarSign size={16} /> Sell
+                      <button 
+                        className="trade-btn-sell" 
+                        onClick={() => sendAction("trade", { trade_type: "sell", company: tradeCompany, count: tradeCount })} 
+                        style={{ flex: 1 }}
+                        disabled={me.stocks[tradeCompany] < tradeCount}
+                      >
+                        <ArrowUpCircle size={16} /> Sell
                       </button>
                     </div>
                   </div>
