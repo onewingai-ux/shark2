@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, HandCoins } from "lucide-react";
+import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, HandCoins, Bot } from "lucide-react";
 import "./App.css";
 
 const COMPANIES = ["red", "blue", "green", "yellow"];
@@ -89,6 +89,17 @@ function App() {
       setErrorMsg("Failed to join room.");
     }
   };
+  
+  const addBot = async () => {
+    if (!gameState) return;
+    try {
+      const res = await fetch(`/api/rooms/${gameState.room_id}/add_bot`, { method: "POST" });
+      if (!res.ok) setErrorMsg("Failed to add bot.");
+    } catch (e) {
+      console.error(e);
+      setErrorMsg("Failed to add bot.");
+    }
+  }
 
   const sendAction = (action: string, data: any = {}) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -191,13 +202,20 @@ function App() {
           <div className="panel-section" style={{ padding: "0", background: "transparent", border: "none", boxShadow: "none" }}>
             
             {gameState.status === "waiting" && (
-              <div className="status-banner status-waiting">
-                <Info size={24} />
-                <div>
-                  <strong>Waiting for players...</strong>
-                  <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>Share code <b>{gameState.room_id}</b> to invite others.</div>
-                  <button onClick={() => sendAction("start")} style={{ marginTop: "0.75rem", background: "#ca8a04" }}>
-                    Start Game Now
+              <div className="status-banner status-waiting" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1rem" }}>
+                <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                  <Info size={24} />
+                  <div>
+                    <strong>Waiting for players...</strong>
+                    <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>Share code <b>{gameState.room_id}</b> to invite others.</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", width: "100%" }}>
+                  <button onClick={addBot} style={{ flex: 1, background: "#0f172a", color: "white" }}>
+                    <Bot size={18} /> Add Bot
+                  </button>
+                  <button onClick={() => sendAction("start")} style={{ flex: 1, background: "#ca8a04" }} disabled={gameState.players.length < 2}>
+                    <Play size={18} /> Start Game Now
                   </button>
                 </div>
               </div>
@@ -231,7 +249,7 @@ function App() {
                 <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
                   <div style={{ background: "#fff", padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #bfdbfe", textAlign: "center", flex: 1 }}>
                     <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Company</div>
-                    <div style={{ fontWeight: 700, fontSize: "1.1rem", textTransform: "capitalize" }} className={['black', 'gray'].includes(gameState.current_company_die) ? '' : `company-${gameState.current_company_die} company-badge`}>
+                    <div style={{ fontWeight: 700, fontSize: "1.1rem", textTransform: "capitalize", margin: "auto", display: "inline-block", padding: "0 0.5rem" }} className={['black', 'gray'].includes(gameState.current_company_die) ? '' : `company-${gameState.current_company_die} company-badge`}>
                       {gameState.current_company_die}
                     </div>
                   </div>
@@ -272,7 +290,7 @@ function App() {
 
                 {(gameState.phase === "trade1" || gameState.phase === "trade2") && (
                   <div className="trade-panel">
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)" }}>TRADE DESK</div>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.5rem" }}>TRADE DESK</div>
                     <div className="trade-controls">
                       <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2 }}>
                         {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
@@ -285,7 +303,7 @@ function App() {
                         style={{ width: "60px", textAlign: "center" }}
                       />
                     </div>
-                    <div className="trade-controls">
+                    <div className="trade-controls" style={{ marginTop: "0.5rem" }}>
                       <button className="trade-btn-buy" onClick={() => sendAction("trade", { trade_type: "buy", company: tradeCompany, count: tradeCount })} style={{ flex: 1 }}>
                         <HandCoins size={16} /> Buy
                       </button>
@@ -308,7 +326,7 @@ function App() {
               
               {COMPANIES.map(c => (
                 <React.Fragment key={c}>
-                  <div><span className={`company-${c} company-badge`}>{c}</span></div>
+                  <div><span className={`company-${c} company-badge`} style={{ display: 'inline-block', minWidth: '60px', textAlign: 'center' }}>{c}</span></div>
                   <div style={{ fontWeight: 600, fontFamily: "monospace", fontSize: "1.1rem" }}>${gameState.stock_price[c].toLocaleString()}</div>
                   <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>{gameState.remaining_buildings[c]} / 18 bldgs</div>
                 </React.Fragment>
@@ -321,8 +339,10 @@ function App() {
             {gameState.players.map((p: any) => (
               <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""}`}>
                 <div className="player-header">
-                  <div className="player-name">
-                    {p.name} {p.id === playerId ? <span style={{ color: "var(--primary)", fontSize: "0.85rem", fontWeight: 500 }}>(You)</span> : ""}
+                  <div className="player-name" style={{ display: "flex", alignItems: "center" }}>
+                    {p.name} 
+                    {p.is_bot && <span className="bot-tag"><Bot size={12}/> BOT</span>}
+                    {p.id === playerId ? <span style={{ color: "var(--primary)", fontSize: "0.85rem", fontWeight: 500, marginLeft: "0.5rem" }}>(You)</span> : ""}
                   </div>
                   <div className="cash-badge">
                     <DollarSign size={14} /> {p.cash.toLocaleString()}
@@ -333,7 +353,7 @@ function App() {
                 <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Portfolio</div>
                 <div className="portfolio">
                   {COMPANIES.map(c => (
-                    <div key={c} className={`portfolio-item ${p.stocks[c] > 0 ? 'company-'+c : ''}`} style={p.stocks[c] === 0 ? { background: '#e2e8f0', color: '#94a3b8' } : {}}>
+                    <div key={c} className={`portfolio-item ${p.stocks[c] > 0 ? 'company-'+c : ''}`} style={p.stocks[c] === 0 ? { background: '#e2e8f0', color: '#94a3b8', boxShadow: 'none' } : {}}>
                       {p.stocks[c]}
                     </div>
                   ))}

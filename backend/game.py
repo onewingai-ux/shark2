@@ -35,6 +35,7 @@ class Player(BaseModel):
     cash: int = 0
     stocks: Dict[Company, int] = {c: 0 for c in COMPANIES}
     bankrupt: bool = False
+    is_bot: bool = False
 
 def create_initial_board() -> List[List[Cell]]:
     board: List[List[Cell]] = []
@@ -70,9 +71,9 @@ class GameState:
                 return p
         return None
 
-    def add_player(self, player_id: str, name: str):
+    def add_player(self, player_id: str, name: str, is_bot: bool = False):
         if not self.is_playing and not self.get_player(player_id):
-            self.players.append(Player(id=player_id, name=name))
+            self.players.append(Player(id=player_id, name=name, is_bot=is_bot))
 
     def start_game(self) -> bool:
         if len(self.players) < 2:

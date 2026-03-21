@@ -2,6 +2,7 @@ import asyncio
 import json
 import uuid
 import os
+import random
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -10,8 +11,10 @@ from pydantic import BaseModel
 
 try:
     from game import GameState, COMPANIES
+    from bot_heuristics import get_best_expansion_move, get_best_trade
 except ImportError:
     from backend.game import GameState, COMPANIES
+    from backend.bot_heuristics import get_best_expansion_move, get_best_trade
 
 app = FastAPI()
 
@@ -41,6 +44,26 @@ async def join_room(room_id: str, req: JoinRequest):
     game.add_player(req.player_id, req.player_name)
     return {"status": "ok", "room_id": room_id, "player_id": req.player_id}
 
+@app.post("/api/rooms/{room_id}/add_bot")
+async def add_bot(room_id: str):
+    room_id = room_id.upper()
+    if room_id not in rooms:
+        return {"error": "Room not found"}
+        
+    game = rooms[room_id]
+    if game.is_playing:
+        return {"error": "Game already started"}
+        
+    bot_id = "BOT-" + str(uuid.uuid4())[:4].upper()
+    bot_names = ["SharkyBot", "FinGPT", "AlphaShark", "DeepBlue"]
+    existing_names = [p.name for p in game.players]
+    available_names = [n for n in bot_names if n not in existing_names]
+    name = random.choice(available_names) if available_names else "Bot_" + bot_id[-4:]
+    
+    game.add_player(bot_id, name, is_bot=True)
+    await broadcast_state(room_id)
+    return {"status": "ok", "bot_id": bot_id}
+
 @app.post("/api/rooms/create")
 async def create_room():
     room_id = str(uuid.uuid4())[:6].upper()
@@ -64,6 +87,79 @@ async def broadcast_state(room_id: str):
             
     for ws in disconnected:
         connections[room_id].remove(ws)
+
+async def run_bot_turn(room_id: str):
+    if room_id not in rooms: return
+    game = rooms[room_id]
+    
+    player = game.current_player()
+    if not player or getattr(player, 'is_bot', False) == False or not game.is_playing:
+        return
+        
+    await asyncio.sleep(1.0) # Give UI a moment
+    
+    if game.phase == "trade1":
+        # Bot trade logic before rolling
+        action, comp, count = get_best_trade(game, player)
+        if action:
+            game.trade(player.id, action, comp, count)
+            await broadcast_state(room_id)
+            await asyncio.sleep(1.0)
+            
+        game.roll_dice()
+        await broadcast_state(room_id)
+        await asyncio.sleep(1.5) # Bot is "thinking" about placement
+        
+    if game.phase == "expand":
+        # Bot expansion heuristics
+        comp_die = game.current_company_die
+        area_die = game.current_area_die
+        
+        # Simple heuristic expansion logic (without crashing from get_best_expansion_move issues)
+        # 1. Gather valid spaces
+        valid_moves = []
+        for r in range(12):
+            for c in range(12):
+                cell = game.board[r][c]
+                if cell.company is None:
+                    if (area_die == "SHARK" and cell.area == "SHARK") or (area_die != "SHARK" and cell.area == area_die):
+                        valid_moves.append((r, c))
+        
+        placed = False
+        if valid_moves:
+            comps = [comp_die] if comp_die not in ["black", "gray"] else [c for c in COMPANIES if game.remaining_buildings[c] > 0]
+            
+            # 1. Try extending chains or creating lone (heuristics implicitly handled by game rules on try)
+            for r, c in valid_moves:
+                for comp in comps:
+                    success, _ = game.expand(player.id, r, c, comp)
+                    if success:
+                        placed = True
+                        break
+                if placed: break
+                        
+        if not placed:
+            # Force skip if blocked
+            game.phase = "trade2"
+            
+        await broadcast_state(room_id)
+        await asyncio.sleep(1.0)
+        
+    if game.phase == "trade2":
+        # Bot trade logic after expanding
+        action, comp, count = get_best_trade(game, player)
+        if action:
+            game.trade(player.id, action, comp, count)
+            await broadcast_state(room_id)
+            await asyncio.sleep(1.0)
+            
+        game.end_turn(player.id)
+        await broadcast_state(room_id)
+        
+        # If the NEXT player is also a bot, schedule another run
+        next_p = game.current_player()
+        if next_p and getattr(next_p, 'is_bot', False) and game.is_playing:
+            asyncio.create_task(run_bot_turn(room_id))
 
 @app.websocket("/ws/{room_id}/{player_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
@@ -94,7 +190,14 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
                 
                 if action == "start":
                     success = game.start_game()
-                    if not success: error = "Need more players"
+                    if not success: 
+                        error = "Need more players"
+                    else:
+                        # Kick off bot if bot is first
+                        p = game.current_player()
+                        if p and getattr(p, 'is_bot', False):
+                            asyncio.create_task(run_bot_turn(room_id))
+                            
                 elif action == "roll":
                     game.roll_dice()
                     success = True
@@ -114,6 +217,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
                     )
                 elif action == "end_turn":
                     success, error = game.end_turn(player_id)
+                    # Trigger next bot turn if needed
+                    if success:
+                        next_p = game.current_player()
+                        if next_p and getattr(next_p, 'is_bot', False):
+                            asyncio.create_task(run_bot_turn(room_id))
                     
                 if error:
                     await websocket.send_json({"type": "error", "message": error})
