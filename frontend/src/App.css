@@ -554,3 +554,105 @@ input:focus, select:focus {
   align-items: center;
   gap: 0.2rem;
 }
+
+/* Trade Desk Fixes */
+.trade-controls select, .trade-controls input {
+  color: var(--text-main);
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.trade-controls select option {
+  color: var(--text-main);
+  background-color: var(--surface);
+}
+
+.trade-panel {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.transaction-value {
+  background: #f8fafc !important;
+  border: 1px solid var(--border) !important;
+}
+/* Variant Selection & Help styling */
+.variant-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+  margin-bottom: 1rem;
+  background: rgba(0,0,0,0.05);
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.variant-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.how-to-play-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.how-to-play-content {
+  background: var(--surface);
+  padding: 2rem;
+  border-radius: 12px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  text-align: left;
+}
+
+.how-to-play-content h2 {
+  margin-top: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.how-to-play-content h3 {
+  color: var(--primary);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.how-to-play-content ul {
+  padding-left: 1.5rem;
+  margin: 0;
+}
+
+.how-to-play-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.close-button:hover {
+  color: var(--text-main);
+  background: none;
+}

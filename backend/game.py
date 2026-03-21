@@ -21,7 +21,7 @@ BOARD_LAYOUT: List[str] = [
 ]
 
 COMPANIES = ["red", "blue", "green", "yellow"]
-MAX_STOCK_PRICE = 15000
+MAX_STOCK_PRICE = 10000
 
 class Cell(BaseModel):
     row: int
@@ -48,7 +48,8 @@ def create_initial_board() -> List[List[Cell]]:
     return board
 
 class GameState:
-    def __init__(self, room_id: str):
+    def __init__(self, room_id: str, variants: List[str] = None):
+        self.variants = variants or []
         self.room_id = room_id
         self.players: List[Player] = []
         self.is_playing = False
@@ -57,7 +58,7 @@ class GameState:
         self.board: List[List[Cell]] = create_initial_board()
         self.stock_price: Dict[Company, int] = {c: 0 for c in COMPANIES}
         self.remaining_buildings: Dict[Company, int] = {c: 18 for c in COMPANIES}
-        self.total_stocks: Dict[Company, int] = {c: 25 for c in COMPANIES} # Rule assumption? 25 stocks per company
+        self.total_stocks: Dict[Company, int] = {c: 25 for c in COMPANIES}
         self.game_over = False
         self.phase: Literal["trade1", "expand", "trade2", "game_over"] = "trade1"
         self.logs: List[str] = []
@@ -393,19 +394,47 @@ class GameState:
         end = False
         reason = ""
         for c in COMPANIES:
-            if self.stock_price[c] >= 15000:
-                end = True
+            if self.stock_price[c] >= 10000:
+                if "short_game" in self.variants:
+                if self.stock_price[c] >= 10000:
+                    end = True
+                    reason = f"{c} hit $10,000"
+            else:
+                if self.stock_price[c] >= 15000:
+                    end = True
+                    reason = f"{c} hit $15,000"
                 reason = f"{c} hit $15,000"
             if self.remaining_buildings[c] == 0:
-                end = True
+                if "short_game" in self.variants:
+                if self.stock_price[c] >= 10000:
+                    end = True
+                    reason = f"{c} hit $10,000"
+            else:
+                if self.stock_price[c] >= 15000:
+                    end = True
+                    reason = f"{c} hit $15,000"
                 reason = f"All {c} buildings used"
             if sum(p.stocks[c] for p in self.players) == self.total_stocks[c]:
-                end = True
+                if "short_game" in self.variants:
+                if self.stock_price[c] >= 10000:
+                    end = True
+                    reason = f"{c} hit $10,000"
+            else:
+                if self.stock_price[c] >= 15000:
+                    end = True
+                    reason = f"{c} hit $15,000"
                 reason = f"All {c} stocks bought"
                 
         active_players = [p for p in self.players if not p.bankrupt]
         if len(active_players) <= 1:
-            end = True
+            if "short_game" in self.variants:
+                if self.stock_price[c] >= 10000:
+                    end = True
+                    reason = f"{c} hit $10,000"
+            else:
+                if self.stock_price[c] >= 15000:
+                    end = True
+                    reason = f"{c} hit $15,000"
             reason = "All other players bankrupt"
 
         if end:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle, Settings, HelpCircle, X } from "lucide-react";
 import "./App.css";
 
 const COMPANIES = ["red", "blue", "green", "yellow"];
@@ -11,6 +11,9 @@ function App() {
   const [gameState, setGameState] = useState<any>(null);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [variants, setVariants] = useState<string[]>([]);
 
   const [tradeCompany, setTradeCompany] = useState("red");
   const [tradeCount, setTradeCount] = useState(1);
@@ -56,7 +59,11 @@ function App() {
 
   const createRoom = async () => {
     try {
-      const res = await fetch("/api/rooms/create", { method: "POST" });
+      const res = await fetch("/api/rooms/create", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variants }) 
+      });
       const data = await res.json();
       setRoomId(data.room_id);
     } catch (e) {
@@ -117,6 +124,10 @@ function App() {
     
     sendAction("expand", { row: r, col: c, company: comp });
   };
+  
+  const toggleVariant = (variant: string) => {
+    setVariants(prev => prev.includes(variant) ? prev.filter(v => v !== variant) : [...prev, variant]);
+  }
 
   if (!ws) {
     return (
@@ -133,6 +144,20 @@ function App() {
           )}
           
           <div className="lobby-form">
+            <button type="button" onClick={() => setShowHowToPlay(true)} style={{ background: "transparent", color: "var(--primary)", border: "1px solid var(--primary)", marginBottom: "1rem" }}>
+              <HelpCircle size={18} /> How to Play
+            </button>
+            
+            <div className="variant-selection" style={{ background: "transparent", border: "1px solid #cbd5e1" }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Settings size={14} /> GAME OPTIONS
+              </div>
+              <label className="variant-label">
+                <input type="checkbox" checked={variants.includes("short_game")} onChange={() => toggleVariant("short_game")} />
+                Short Game (Ends at $10,000 instead of $15,000)
+              </label>
+            </div>
+            
             <button type="button" onClick={createRoom} style={{ background: "#0f172a" }}>
               <Play size={18} /> Create New Room
             </button>
@@ -157,6 +182,38 @@ function App() {
             </form>
           </div>
         </div>
+        
+        {showHowToPlay && (
+          <div className="how-to-play-modal" onClick={() => setShowHowToPlay(false)}>
+            <div className="how-to-play-content" onClick={e => e.stopPropagation()}>
+              <button className="close-button" onClick={() => setShowHowToPlay(false)}><X size={24} /></button>
+              <h2>How to Play Shark 🦈</h2>
+              
+              <h3>Objective</h3>
+              <p>Be the wealthiest player when the game ends. You earn wealth by buying and selling stocks, expanding companies, and triggering hostile takeovers.</p>
+
+              <h3>Turn Structure</h3>
+              <ul>
+                <li><strong>Trade (Optional):</strong> Buy up to 5 stocks (total across all companies) and/or sell any number of stocks. Stocks must be ≥ $1,000 to trade.</li>
+                <li><strong>Expand (Mandatory):</strong> Roll the Company and Area dice. Place a building of the rolled company color onto an empty cell in the rolled area. (Black/Gray dies are wildcards).</li>
+                <li><strong>Trade Again (Optional):</strong> You can buy/sell again, observing the 5-stock buy limit for the whole turn.</li>
+              </ul>
+              
+              <h3>Placing Buildings</h3>
+              <ul>
+                <li><strong>Lone Building:</strong> Placing a building not orthogonally adjacent to any other buildings grants you a $1,000 bonus.</li>
+                <li><strong>Chains:</strong> Placing a building adjacent to others of the SAME color forms a chain. The stock price becomes $1,000 × (number of buildings in chain). You get a cash bonus equal to the new stock price!</li>
+                <li><strong>Hostile Takeover:</strong> You can place adjacent to an OPPOSING company's building ONLY IF your newly formed chain is strictly larger than the opposing chain. You destroy the opposing buildings, dropping their stock price!</li>
+              </ul>
+              
+              <h3>Dividends & Losses</h3>
+              <p>Whenever a company's stock price goes UP, everyone holding that stock gets paid the difference in cash. When it goes DOWN (due to a takeover), everyone (except the current player) pays the difference! If you can't pay, you must sell stocks at half price or go bankrupt.</p>
+              
+              <h3>Game End</h3>
+              <p>The game ends when any stock reaches $15,000, all buildings of a company are used, or all stocks of all companies are bought.</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -209,6 +266,11 @@ function App() {
                   <div>
                     <strong>Waiting for players...</strong>
                     <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>Share code <b>{gameState.room_id}</b> to invite others.</div>
+                    {gameState.variants && gameState.variants.length > 0 && (
+                      <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", color: "#854d0e", fontWeight: "bold" }}>
+                        Variants: {gameState.variants.join(", ")}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem", width: "100%" }}>
@@ -263,7 +325,7 @@ function App() {
                 {(gameState.current_company_die === "black" || gameState.current_company_die === "gray") && (
                   <div style={{ marginBottom: "1rem" }}>
                     <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.25rem" }}>Choose Wildcard Company: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%" }}>
+                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
                       {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                     </select>
                   </div>
@@ -299,7 +361,7 @@ function App() {
                     </div>
                     
                     <div className="trade-controls" style={{ marginBottom: "1rem" }}>
-                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2, background: "white" }}>
+                      <select value={tradeCompany} onChange={e => setTradeCompany(e.target.value)} style={{ flex: 2, background: "white", color: "var(--text-main)" }}>
                         {COMPANIES.map(c => <option key={c} value={c}>{c.toUpperCase()} (${gameState.stock_price[c].toLocaleString()})</option>)}
                       </select>
                       <input 
@@ -307,11 +369,11 @@ function App() {
                         min="1" max="5" 
                         value={tradeCount} 
                         onChange={e => setTradeCount(Number(e.target.value))} 
-                        style={{ width: "70px", textAlign: "center", background: "white" }}
+                        style={{ width: "70px", textAlign: "center", background: "white", color: "var(--text-main)" }}
                       />
                     </div>
                     
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.9rem", marginBottom: "1rem", padding: "0.5rem", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
+                    <div className="transaction-value" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.9rem", marginBottom: "1rem", padding: "0.5rem", background: "white", borderRadius: "6px", border: "1px dashed #cbd5e1" }}>
                       <span style={{ color: "#64748b" }}>Transaction Value:</span>
                       <strong style={{ fontSize: "1.1rem", color: "#0f172a" }}>${(gameState.stock_price[tradeCompany] * tradeCount).toLocaleString()}</strong>
                     </div>

@@ -6,7 +6,7 @@ import random
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
 try:
@@ -27,6 +27,9 @@ class JoinRequest(BaseModel):
     player_id: str
     player_name: str
 
+class CreateRoomRequest(BaseModel):
+    variants: List[str] = []
+
 class ActionRequest(BaseModel):
     room_id: str
     player_id: str
@@ -37,6 +40,7 @@ class ActionRequest(BaseModel):
 async def join_room(room_id: str, req: JoinRequest):
     room_id = room_id.upper()
     if room_id not in rooms:
+        # Create without variants if joining a non-existent room directly
         rooms[room_id] = GameState(room_id)
         connections[room_id] = []
         
@@ -65,11 +69,11 @@ async def add_bot(room_id: str):
     return {"status": "ok", "bot_id": bot_id}
 
 @app.post("/api/rooms/create")
-async def create_room():
+async def create_room(req: CreateRoomRequest):
     room_id = str(uuid.uuid4())[:6].upper()
-    rooms[room_id] = GameState(room_id)
+    rooms[room_id] = GameState(room_id, variants=req.variants)
     connections[room_id] = []
-    return {"room_id": room_id}
+    return {"room_id": room_id, "variants": req.variants}
 
 async def broadcast_state(room_id: str):
     if room_id not in connections or room_id not in rooms:
@@ -81,6 +85,7 @@ async def broadcast_state(room_id: str):
     for ws in connections[room_id]:
         try:
             state = game.get_client_state("")
+            state["variants"] = game.variants
             await ws.send_json({"type": "state", "state": state})
         except Exception as e:
             disconnected.append(ws)
