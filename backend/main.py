@@ -22,8 +22,8 @@ app = FastAPI()
 # In-memory store
 rooms: Dict[str, GameState] = {}
 connections: Dict[str, List[WebSocket]] = {}
-# Lock for bot execution to prevent double-spawning tasks
-bot_locks: Dict[str, bool] = {}
+# Track if a room's bot loop is already running
+bot_loops_running: Dict[str, bool] = {}
 
 class JoinRequest(BaseModel):
     room_id: str
@@ -45,7 +45,7 @@ async def join_room(room_id: str, req: JoinRequest):
     if room_id not in rooms:
         rooms[room_id] = GameState(room_id)
         connections[room_id] = []
-        bot_locks[room_id] = False
+        bot_loops_running[room_id] = False
         
     game = rooms[room_id]
     game.add_player(req.player_id, req.player_name)
@@ -76,7 +76,7 @@ async def create_room(req: CreateRoomRequest):
     room_id = str(uuid.uuid4())[:6].upper()
     rooms[room_id] = GameState(room_id, variants=req.variants)
     connections[room_id] = []
-    bot_locks[room_id] = False
+    bot_loops_running[room_id] = False
     return {"room_id": room_id, "variants": req.variants}
 
 async def broadcast_state(room_id: str):
@@ -97,69 +97,93 @@ async def broadcast_state(room_id: str):
     for ws in disconnected:
         connections[room_id].remove(ws)
 
-async def run_bot_turn(room_id: str):
-    if bot_locks.get(room_id, False):
-        return # Prevent duplicate bot loops
-        
-    bot_locks[room_id] = True
-    try:
-        if room_id not in rooms: return
-        game = rooms[room_id]
-        
-        player = game.current_player()
-        if not player or getattr(player, 'is_bot', False) == False or not game.is_playing:
-            return
+async def room_bot_loop(room_id: str):
+    """
+    A continuous background task per room that monitors for bot turns.
+    This replaces the recursively spawned task approach which was dropping turns on unhandled exceptions.
+    """
+    bot_loops_running[room_id] = True
+    print(f"[{room_id}] 🤖 Bot engine initialized.")
+    
+    while room_id in rooms:
+        try:
+            game = rooms[room_id]
             
-        await asyncio.sleep(1.0)
-        
-        # In case human ended turn super fast while task queued
-        player = game.current_player()
-        if not getattr(player, 'is_bot', False):
-            return
-
-        if game.phase == "trade1":
-            action, comp, count = get_best_trade(game, player)
-            if action:
-                game.trade(player.id, action, comp, count)
+            # If game isn't playing or is over, sleep and check again later
+            if not game.is_playing or game.game_over:
+                await asyncio.sleep(1.0)
+                continue
+                
+            player = game.current_player()
+            
+            # If it's a human's turn, sleep and wait
+            if not player or not getattr(player, 'is_bot', False):
+                await asyncio.sleep(0.5)
+                continue
+                
+            # --- IT IS A BOT'S TURN ---
+            await asyncio.sleep(1.5) # Give UI a moment to show whose turn it is
+            
+            # Check player again in case state changed during sleep
+            player = game.current_player()
+            if not getattr(player, 'is_bot', False) or not game.is_playing:
+                continue
+                
+            if game.phase == "trade1":
+                action, comp, count = get_best_trade(game, player)
+                if action:
+                    game.trade(player.id, action, comp, count)
+                    await broadcast_state(room_id)
+                    await asyncio.sleep(1.0)
+                    
+                game.roll_dice()
+                await broadcast_state(room_id)
+                await asyncio.sleep(2.0) # Bot is "thinking" about placement
+                
+            if game.phase == "expand":
+                r, c, comp = get_best_expansion_move(game, player, game.current_company_die, game.current_area_die)
+                if r != -1 and c != -1:
+                    game.expand(player.id, r, c, comp, "choose" if comp in COMPANIES else "place")
+                else:
+                    # Failsafe if heuristics break down completely
+                    game.phase = "trade2"
+                    
                 await broadcast_state(room_id)
                 await asyncio.sleep(1.0)
                 
-            game.roll_dice()
-            await broadcast_state(room_id)
-            await asyncio.sleep(2.0)
+            if game.phase == "trade2":
+                action, comp, count = get_best_trade(game, player)
+                if action:
+                    game.trade(player.id, action, comp, count)
+                    await broadcast_state(room_id)
+                    await asyncio.sleep(1.0)
+                    
+                success, _ = game.end_turn(player.id)
+                if success:
+                    await broadcast_state(room_id)
+                    
+        except Exception as e:
+            print(f"[{room_id}] ⚠️ CRITICAL BOT ERROR, RECOVERING:")
+            traceback.print_exc()
+            # If the bot completely crashes mid-turn, force end its turn so the game isn't soft-locked.
+            try:
+                game = rooms[room_id]
+                player = game.current_player()
+                if player and getattr(player, 'is_bot', False):
+                    game.phase = "trade1" # Reset phase state
+                    # Skip to next player to unstick
+                    for _ in range(len(game.players)):
+                        game.current_turn_index = (game.current_turn_index + 1) % len(game.players)
+                        if not game.current_player().bankrupt:
+                            break
+                    game.log(f"💥 {player.name} experienced a critical system failure and passed their turn.")
+                    await broadcast_state(room_id)
+            except Exception as inner_e:
+                print(f"Failed to recover bot turn: {inner_e}")
+            await asyncio.sleep(2.0) # Pause before retrying loop
             
-        if game.phase == "expand":
-            r, c, comp = get_best_expansion_move(game, player, game.current_company_die, game.current_area_die)
-            if r != -1 and c != -1:
-                game.expand(player.id, r, c, comp, "choose" if comp in COMPANIES else "place")
-            else:
-                game.phase = "trade2"
-                
-            await broadcast_state(room_id)
-            await asyncio.sleep(1.0)
-            
-        if game.phase == "trade2":
-            action, comp, count = get_best_trade(game, player)
-            if action:
-                game.trade(player.id, action, comp, count)
-                await broadcast_state(room_id)
-                await asyncio.sleep(1.0)
-                
-            success, _ = game.end_turn(player.id)
-            if success:
-                await broadcast_state(room_id)
-                
-                next_p = game.current_player()
-                if next_p and getattr(next_p, 'is_bot', False) and game.is_playing:
-                    # Release lock so the scheduled task can run
-                    bot_locks[room_id] = False
-                    await asyncio.sleep(0.5)
-                    asyncio.create_task(run_bot_turn(room_id))
-    except Exception as e:
-        print(f"[{room_id}] CRITICAL BOT ERROR:")
-        traceback.print_exc()
-    finally:
-        bot_locks[room_id] = False
+    print(f"[{room_id}] 🛑 Bot engine terminating (room destroyed).")
+    bot_loops_running.pop(room_id, None)
 
 @app.websocket("/ws/{room_id}/{player_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
@@ -199,9 +223,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
                     if not success: 
                         error = "Need more players"
                     else:
-                        p = game.current_player()
-                        if p and getattr(p, 'is_bot', False):
-                            asyncio.create_task(run_bot_turn(room_id))
+                        # Boot up the room's permanent bot engine if not running already
+                        if not bot_loops_running.get(room_id, False):
+                            asyncio.create_task(room_bot_loop(room_id))
                             
                 elif action == "roll":
                     game.roll_dice()
@@ -223,10 +247,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
                     )
                 elif action == "end_turn":
                     success, error = game.end_turn(player_id)
-                    if success:
-                        next_p = game.current_player()
-                        if next_p and getattr(next_p, 'is_bot', False) and game.is_playing:
-                            asyncio.create_task(run_bot_turn(room_id))
                     
                 if error:
                     await websocket.send_json({"type": "error", "message": error})
