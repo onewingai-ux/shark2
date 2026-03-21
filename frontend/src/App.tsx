@@ -152,6 +152,10 @@ function App() {
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <Settings size={14} /> GAME OPTIONS
               </div>
+               <label className="variant-label">
+                <input type="checkbox" checked={variants.includes("open_hands")} onChange={() => toggleVariant("open_hands")} />
+                Open Hands (Everyone sees exact stock counts)
+              </label>
               <label className="variant-label">
                 <input type="checkbox" checked={variants.includes("short_game")} onChange={() => toggleVariant("short_game")} />
                 Short Game (Ends at $10,000 instead of $15,000)
@@ -439,7 +443,7 @@ function App() {
                 <div className="portfolio">
                   {COMPANIES.map(c => (
                     <div key={c} className={`portfolio-item ${p.stocks[c] > 0 ? 'company-'+c : ''}`} style={p.stocks[c] === 0 ? { background: '#e2e8f0', color: '#94a3b8', boxShadow: 'none' } : {}}>
-                      {p.stocks[c]}
+                      {gameState.variants?.includes("open_hands") || p.id === playerId || gameState.status === "game_over" ? p.stocks[c] : "?"}
                     </div>
                   ))}
                 </div>
