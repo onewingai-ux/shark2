@@ -76,7 +76,7 @@ header h2 {
 .main-content {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
   padding: 1.5rem;
   gap: 2rem;
 }
@@ -146,7 +146,7 @@ header h2 {
   background: #000; 
   color: transparent; 
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 .area-shark::after {
   content: '🦈';
@@ -368,7 +368,7 @@ input:focus, select:focus {
   background: #0f172a;
   transition: all 0.2s;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .player-card.active-turn {
@@ -461,7 +461,7 @@ input:focus, select:focus {
 
 /* Activity Log */
 .logs {
-  flex: 1;
+  max-height: 250px;
   overflow-y: auto;
   font-family: 'Space Mono', monospace;
   font-size: 0.8rem;
@@ -634,4 +634,7 @@ select, option {
   color: #0f172a !important;
   background-color: #f8fafc !important;
   border: 1px solid #cbd5e1 !important;
+}
+.panel-section {
+  flex: none; /* Make sure flex doesn't cause unexpected stretching */
 }
