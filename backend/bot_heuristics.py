@@ -129,63 +129,74 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
     2. Try to buy stocks of companies that have buildings on the board (momentum).
     3. Diversify (don't buy > 10 of one stock unless it's doing incredibly well).
     4. Sell stocks if they're high and we need cash for other things, or if we're broke.
+    5. Don't buy enough stock to end the game UNLESS we are currently mathematically winning.
     """
     try:
-        # Evaluate company momentum (buildings on board)
+        # Check current wealth to see if we're winning
+        my_wealth = player.cash + sum(player.stocks[c] * game.stock_price[c] for c in ["red", "blue", "green", "yellow"])
+        max_opp_wealth = 0
+        for p in game.players:
+            if p.id != player.id and not getattr(p, "bankrupt", False):
+                opp_w = p.cash + sum(p.stocks[c] * game.stock_price[c] for c in ["red", "blue", "green", "yellow"])
+                max_opp_wealth = max(max_opp_wealth, opp_w)
+                
+        i_am_winning = my_wealth >= max_opp_wealth
+
         momentum = {c: 18 - game.remaining_buildings[c] for c in ["red", "blue", "green", "yellow"]}
         
         if player.cash >= 1500:
-            # Find a good stock to buy
             buy_candidates = []
             for c in ["red", "blue", "green", "yellow"]:
                 price = game.stock_price[c]
                 my_shares = player.stocks[c]
                 avail_shares = game.total_stocks[c] - sum(p.stocks[c] for p in game.players)
                 
-                # Only buy if it's legally tradable
                 if price >= 1000 and avail_shares > 0:
-                    # Don't hoard too much of a single mediocre stock
                     if my_shares > 12 and price < 5000:
                         continue
                         
                     # Calculate a "desirability" score:
-                    # High momentum is good, low price is good (buy low). 
                     score = momentum[c] * 500 - price
                     buy_candidates.append((score, c, price, avail_shares))
             
             if buy_candidates:
-                # Sort by highest score
                 buy_candidates.sort(key=lambda x: x[0], reverse=True)
-                _, target_comp, price, avail_shares = buy_candidates[0]
                 
-                # Buy up to 3 at a time (instead of maxing out 5) to save cash and not rush the game
-                remaining_buys_this_turn = max(0, 5 - game.current_turn_purchases)
-                affordable_count = player.cash // price
-                
-                count = min(3, affordable_count, avail_shares, remaining_buys_this_turn)
-                
-                if count > 0:
-                    drama = [
-                        f"💰 {player.name} aggressively accumulates {count} shares of {target_comp}!",
-                        f"💹 {player.name} sees momentum in {target_comp} and buys {count} shares."
-                    ]
-                    game.log(random.choice(drama))
-                    return "buy", target_comp, count
+                for score, target_comp, price, avail_shares in buy_candidates:
+                    affordable_count = player.cash // price
+                    # To not rush the game, cap purchases per turn to 3 (leaves cash for next turns)
+                    count = min(3, affordable_count, avail_shares, max(0, 5 - getattr(game, 'current_turn_purchases', 0)))
+                    
+                    if count > 0:
+                        # CRITICAL FIX: If this purchase empties the bank, the game ends immediately.
+                        # Should we do it? Only if we are winning!
+                        if avail_shares - count == 0 and not i_am_winning:
+                            # We are losing. Empting the bank ends the game and seals our loss.
+                            # Adjust count down to keep at least 1 share in the bank to buy more time.
+                            count = avail_shares - 1
+                            if count <= 0:
+                                continue # Skip this company, try the next candidate
+                            game.log(f"🛑 {player.name} strategically avoids buying the final {target_comp} shares to keep the game alive!")
+                            
+                        drama = [
+                            f"💰 {player.name} aggressively accumulates {count} shares of {target_comp}!",
+                            f"💹 {player.name} sees momentum in {target_comp} and buys {count} shares."
+                        ]
+                        game.log(random.choice(drama))
+                        return "buy", target_comp, count
                     
         # Selling Logic
         if player.cash < 2000:
-            # Need cash! Sell the highest priced stock we own to get the most runway
             owned = [(c, game.stock_price[c]) for c in ["red", "blue", "green", "yellow"] 
                      if player.stocks[c] > 0 and game.stock_price[c] >= 1000]
             if owned:
-                owned.sort(key=lambda x: x[1], reverse=True) # Highest price first
+                owned.sort(key=lambda x: x[1], reverse=True)
                 target_comp, price = owned[0]
                 
                 game.log(f"📉 {player.name} liquidates 1 share of {target_comp} to free up capital.")
                 return "sell", target_comp, 1
                 
         else:
-            # We have cash, but maybe we should take profits if a stock is super high (> $8000) and we own a lot
             owned_high = [(c, game.stock_price[c]) for c in ["red", "blue", "green", "yellow"] 
                      if player.stocks[c] >= 5 and game.stock_price[c] >= 8000]
             if owned_high and random.random() > 0.7:
