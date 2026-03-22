@@ -93,8 +93,8 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                     elif not is_adj_same and not is_takeover:
                         score += 10  # Fallback: Lone building ($1000)
                         # If I am broke, lone buildings are great for the instant $1000
-                        if player.cash < 3000:
-                            score += 60 # Desperate for cash
+                        if player.cash < 2000:
+                            score += 40
                             
                         if score > best_score:
                             best_score = score
@@ -127,9 +127,9 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
     Smarter Heuristics:
     1. Check wealth to see if we're winning.
     2. Defensively SELL stock to artificially extend game if losing.
-    3. Maintain a healthy cash buffer (~$4000) to survive hostile takeovers and forced liquidations.
-    4. Liquidate underperforming assets if we dip below our cash buffer.
-    5. Buy selectively based on momentum and price, while retaining the cash buffer.
+    3. Maintain a healthy cash buffer (~$4000) ONLY if there is actual risk of a hostile takeover.
+    4. Liquidate underperforming assets if we dip below our calculated risk buffer.
+    5. Buy selectively based on momentum and price, up to our calculated buffer.
     """
     try:
         my_wealth = player.cash + sum(player.stocks[c] * game.stock_price[c] for c in ["red", "blue", "green", "yellow"])
@@ -152,33 +152,68 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
                     return "sell", c, sell_count
 
         # SURVIVAL (CASH RESERVE) LOGIC
-        # Bot tries to always maintain at least $4000 cash to buffer against unexpected takeovers
-        SAFE_CASH_BUFFER = 4000
+        # Bot calculates actual risk based on its portfolio and the board.
+        total_risk = 0
+        
+        for c in ["red", "blue", "green", "yellow"]:
+            if player.stocks[c] == 0: continue
+            
+            # Find all chains of this company
+            my_chains = []
+            visited = set()
+            for r in range(12):
+                for c_idx in range(12):
+                    cell = game.board[r][c_idx]
+                    if cell.company == c and (r, c_idx) not in visited:
+                        chain = game._get_chain(r, c_idx)
+                        for ch_cell in chain:
+                            visited.add((ch_cell.row, ch_cell.col))
+                        my_chains.append(chain)
+                        
+            # Analyze each chain for adjacent enemy presence
+            for chain in my_chains:
+                is_chain_at_risk = False
+                for cell in chain:
+                    # Check if an enemy is directly adjacent, meaning a takeover could happen
+                    adj_cells = game._get_adjacent(cell.row, cell.col, include_diagonal=False)
+                    for adj in adj_cells:
+                        if adj.company and adj.company != c and adj.company != "gray":
+                            is_chain_at_risk = True
+                            break
+                    if is_chain_at_risk:
+                        break
+                        
+                if is_chain_at_risk:
+                    # If the chain is at risk, we need cash to survive a potential drop
+                    # The absolute worst case is the entire company stock price zeroes out
+                    total_risk += game.stock_price[c] * player.stocks[c]
+
+        # Don't hold more than 4000 in reserve even if risk is high, to avoid total paralysis
+        SAFE_CASH_BUFFER = min(4000, total_risk)
         
         if player.cash < SAFE_CASH_BUFFER:
             # Need to build up a cash reserve to prevent bankruptcy
             owned = [(c, game.stock_price[c], momentum[c]) for c in ["red", "blue", "green", "yellow"] 
                      if player.stocks[c] > 0 and game.stock_price[c] >= 1000]
             if owned:
-                # Sell the stock with the worst momentum (fewest buildings), breaking ties by highest price to get the most cash
+                # Sell the stock with the worst momentum (fewest buildings), breaking ties by highest price
                 owned.sort(key=lambda x: (x[2], -x[1]))
                 target_comp, price, _ = owned[0]
                 
-                # Sell enough to get safely over the buffer, max 3 shares at a time
                 needed_cash = SAFE_CASH_BUFFER - player.cash
                 shares_to_sell = min(player.stocks[target_comp], 3, (needed_cash // price) + 1)
                 
                 if shares_to_sell > 0:
                     drama = [
-                        f"📉 {player.name} liquidates {shares_to_sell} shares of {target_comp} to build a cash reserve.",
-                        f"🏦 Feeling the heat, {player.name} sells off {target_comp} stock to avoid bankruptcy."
+                        f"📉 {player.name} liquidates {shares_to_sell} shares of {target_comp} to build a safety buffer.",
+                        f"🏦 Assessing market risk, {player.name} sells off {target_comp} stock to shore up cash reserves."
                     ]
                     game.log(random.choice(drama))
                     return "sell", target_comp, shares_to_sell
 
         # REGULAR BUYING LOGIC
-        # Only buy if we have more cash than our safe buffer
-        if player.cash > SAFE_CASH_BUFFER:
+        # Only buy if we have more cash than our safe buffer (or if buffer is 0, spend down to 0)
+        if player.cash > SAFE_CASH_BUFFER or (player.cash >= 1000 and SAFE_CASH_BUFFER == 0):
             available_cash_to_spend = player.cash - SAFE_CASH_BUFFER
             
             buy_candidates = []
@@ -188,7 +223,6 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
                 avail_shares = game.total_stocks[c] - sum(p.stocks[c] for p in game.players)
                 
                 if price >= 1000 and avail_shares > 0:
-                    # Diversify - don't overcommit to one company unless it's cheap
                     if my_shares > 12 and price < 5000:
                         continue
                         
