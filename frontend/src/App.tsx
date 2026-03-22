@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle, Settings, HelpCircle, X } from "lucide-react";
+import { AlertCircle, Play, DollarSign, LogOut, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle, Settings, HelpCircle, X, Users, Activity } from "lucide-react";
 import "./App.css";
 
 const COMPANIES = ["red", "blue", "green", "yellow"];
@@ -359,17 +359,18 @@ function App() {
           </div>
         </div>
 
+        {/* SIDEBAR IS NOW A RIGID SPLIT LAYOUT */}
         <div className="side-panel">
+          
           {errorMsg && (
-            <div className="error-message" style={{ margin: "0" }}>
+            <div className="error-message" style={{ margin: "0", flex: "none" }}>
               <AlertCircle size={20} /> {errorMsg}
             </div>
           )}
           
-          <div className="panel-section" style={{ padding: "0", background: "transparent", border: "none", boxShadow: "none" }}>
-            
+          <div className="status-section">
             {gameState.status === "waiting" && (
-              <div className="status-banner status-waiting" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1rem" }}>
+              <div className="status-banner status-waiting" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "1rem", margin: 0 }}>
                 <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
                   <Info size={32} />
                   <div>
@@ -394,7 +395,7 @@ function App() {
             )}
             
             {gameState.status === "playing" && (
-              <div className={`status-banner ${isMyTurn ? (gameState.phase === 'expand' ? 'status-expand' : 'status-playing') : ''}`} style={!isMyTurn ? { background: "#1e293b", color: "#94a3b8", border: "1px solid #334155" } : {}}>
+              <div className={`status-banner ${isMyTurn ? (gameState.phase === 'expand' ? 'status-expand' : 'status-playing') : ''}`} style={!isMyTurn ? { background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", margin: 0 } : { margin: 0 }}>
                 {isMyTurn ? <Play size={28} /> : <RefreshCcw size={28} className={gameState.status === "playing" ? "animate-spin" : ""} />}
                 <div style={{ flex: 1 }}>
                   <strong style={{ fontSize: "1.2rem" }}>{isMyTurn ? "Your Turn!" : "Waiting for other player..."}</strong>
@@ -406,7 +407,7 @@ function App() {
             )}
 
             {gameState.status === "game_over" && (
-              <div className="status-banner status-gameover">
+              <div className="status-banner status-gameover" style={{ margin: 0 }}>
                 <AlertCircle size={32} />
                 <div>
                   <strong style={{ fontSize: "1.2rem" }}>Game Over!</strong>
@@ -414,88 +415,88 @@ function App() {
                 </div>
               </div>
             )}
-            
-            {isMyTurn && gameState.phase === "expand" && (
-              <div className="panel-section" style={{ border: "2px solid var(--primary)", background: "rgba(217, 119, 6, 0.1)" }}>
-                <h3 style={{ marginBottom: "1rem", color: "var(--primary)" }}>Expand Territory</h3>
-                <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
-                  <div style={{ background: "#0f172a", padding: "1rem", borderRadius: "12px", border: "1px solid #334155", textAlign: "center", flex: 1 }}>
-                    <div style={{ fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 800, marginBottom: "0.5rem" }}>Company Die</div>
-                    <div style={{ margin: "auto", display: "inline-block" }} className={`company-badge ${getCompanyColorClasses(gameState.current_company_die)}`}>
-                      {gameState.current_company_die}
+          </div>
+          
+          {/* Active Player Actions Panel */}
+          {isMyTurn && gameState.status === "playing" && (
+            <div className="action-section">
+              {gameState.phase === "expand" && (
+                <div className="panel-section" style={{ border: "2px solid var(--primary)", background: "rgba(217, 119, 6, 0.1)" }}>
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
+                    <div style={{ background: "#0f172a", padding: "1rem", borderRadius: "12px", border: "1px solid #334155", textAlign: "center", flex: 1 }}>
+                      <div style={{ fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 800, marginBottom: "0.5rem" }}>Company Die</div>
+                      <div style={{ margin: "auto", display: "inline-block" }} className={`company-badge ${getCompanyColorClasses(gameState.current_company_die)}`}>
+                        {gameState.current_company_die}
+                      </div>
+                    </div>
+                    <div style={{ background: "#0f172a", padding: "1rem", borderRadius: "12px", border: "1px solid #334155", textAlign: "center", flex: 1 }}>
+                      <div style={{ fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 800, marginBottom: "0.5rem" }}>Area Die</div>
+                      <div style={{ fontWeight: 800, fontSize: "1.5rem", fontFamily: "'Space Mono', monospace", color: "#fff" }}>{gameState.current_area_die === "SHARK" ? "🦈" : gameState.current_area_die}</div>
                     </div>
                   </div>
-                  <div style={{ background: "#0f172a", padding: "1rem", borderRadius: "12px", border: "1px solid #334155", textAlign: "center", flex: 1 }}>
-                    <div style={{ fontSize: "0.75rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 800, marginBottom: "0.5rem" }}>Area Die</div>
-                    <div style={{ fontWeight: 800, fontSize: "1.5rem", fontFamily: "'Space Mono', monospace", color: "#fff" }}>{gameState.current_area_die === "SHARK" ? "🦈" : gameState.current_area_die}</div>
-                  </div>
-                </div>
 
-                {gameState.current_company_die === "black" && !gameState.variants.includes("joker_buildings") && (
-                   <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
-                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                    </select>
-                  </div>
-                )}
-                
-                {gameState.current_company_die === "black" && gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings") && (
-                   <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose ANY building except gray: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
-                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                    </select>
-                  </div>
-                )}
-                
-                {gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings") && (
-                   <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Neutral Action: </label>
-                    <select value={grayAction} onChange={e => setGrayAction(e.target.value)} style={{ width: "100%", marginBottom: "0.75rem", background: "white", color: "var(--text-main)" }}>
-                      <option value="place">Place Gray Barrier</option>
-                      <option value="remove">Remove Gray Barrier</option>
-                      <option value="choose">Place any standard Company building</option>
-                    </select>
-                    {grayAction === "choose" && (
-                        <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
-                          {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                        </select>
-                    )}
-                  </div>
-                )}
-                
-                {gameState.current_company_die === "gray" && !gameState.variants.includes("neutral_buildings") && (
-                   <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
-                    <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
-                      {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-                    </select>
-                  </div>
-                )}
-                
-                <div style={{ fontSize: "0.95em", color: "#94a3b8", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontWeight: 600 }}>
-                  <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to build.
-                </div>
-              </div>
-            )}
-
-            {isMyTurn && gameState.status === "playing" && (
-              <div className="panel-section" style={{ marginTop: "1rem", padding: "1.25rem" }}>
-                <div style={{ display: "flex", gap: "1rem" }}>
-                  {gameState.phase === "trade1" && (
-                    <button onClick={() => sendAction("roll")} style={{ flex: 1, padding: "1rem", fontSize: "1.1rem" }}>
-                      🎲 Roll Dice & Expand
-                    </button>
+                  {gameState.current_company_die === "black" && !gameState.variants.includes("joker_buildings") && (
+                     <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
+                      <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                        {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                      </select>
+                    </div>
                   )}
-                  {(gameState.phase === "trade1" || gameState.phase === "trade2") && (
+                  
+                  {gameState.current_company_die === "black" && gameState.variants.includes("joker_buildings") && gameState.variants.includes("neutral_buildings") && (
+                     <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose ANY building except gray: </label>
+                      <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                        {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  
+                  {gameState.current_company_die === "gray" && gameState.variants.includes("neutral_buildings") && (
+                     <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Neutral Action: </label>
+                      <select value={grayAction} onChange={e => setGrayAction(e.target.value)} style={{ width: "100%", marginBottom: "0.75rem", background: "white", color: "var(--text-main)" }}>
+                        <option value="place">Place Gray Barrier</option>
+                        <option value="remove">Remove Gray Barrier</option>
+                        <option value="choose">Place any standard Company building</option>
+                      </select>
+                      {grayAction === "choose" && (
+                          <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                            {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                          </select>
+                      )}
+                    </div>
+                  )}
+                  
+                  {gameState.current_company_die === "gray" && !gameState.variants.includes("neutral_buildings") && (
+                     <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.5rem", color: "#cbd5e1" }}>Choose Wildcard Company: </label>
+                      <select value={wildcardCompany} onChange={e => setWildcardCompany(e.target.value)} style={{ width: "100%", background: "white", color: "var(--text-main)" }}>
+                        {wildcardOptions.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  
+                  <div style={{ fontSize: "0.95em", color: "#94a3b8", display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", fontWeight: 600 }}>
+                    <ArrowRightCircle size={20} color="var(--primary)" /> Click a valid cell on the board to build.
+                  </div>
+                </div>
+              )}
+              
+              {(gameState.phase === "trade1" || gameState.phase === "trade2") && me && (
+                <div className="panel-section">
+                  <div style={{ display: "flex", gap: "1rem" }}>
+                    {gameState.phase === "trade1" && (
+                      <button onClick={() => sendAction("roll")} style={{ flex: 1, padding: "1rem", fontSize: "1.1rem" }}>
+                        🎲 Roll Dice & Expand
+                      </button>
+                    )}
                     <button onClick={() => sendAction("end_turn")} style={{ background: "#334155", flex: 1 }}>
                       End Turn <LogOut size={18} />
                     </button>
-                  )}
-                </div>
+                  </div>
 
-                {(gameState.phase === "trade1" || gameState.phase === "trade2") && me && (
                   <div className="trade-panel" style={{ marginTop: "1.5rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                       <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", letterSpacing: "0.1em" }}>TRADE DESK</div>
@@ -547,81 +548,86 @@ function App() {
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
 
-          <div className="panel-section">
-            <h3><DollarSign size={24} color="var(--primary)" /> Stock Market</h3>
-            <div className="market-grid">
-              <div className="market-header">Company</div>
-              <div className="market-header">Price</div>
-              <div className="market-header">Supply</div>
-              
-              {COMPANIES.map(c => (
-                <React.Fragment key={c}>
-                  <div><span className={`company-${c} company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>{c}</span></div>
-                  <div style={{ fontWeight: 700, fontFamily: "'Space Mono', monospace", fontSize: "1.2rem", color: "#fff" }}>${gameState.stock_price[c].toLocaleString()}</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings[c]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
-                    <div style={{ fontFamily: "'Space Mono', monospace", color: "#64748b" }}>{getRemainingStocks(c)} <span style={{fontSize:"0.65rem"}}>STKS</span></div>
+          {/* Split Row for Market and Players */}
+          <div className="info-split">
+            <div className="market-col">
+              <h3><Activity size={20} color="var(--primary)" /> Market</h3>
+              <div className="scrollable-content">
+                <div className="market-grid">
+                  <div className="market-header">Comp</div>
+                  <div className="market-header">Price</div>
+                  <div className="market-header">Supply</div>
+                  
+                  {COMPANIES.map(c => (
+                    <React.Fragment key={c}>
+                      <div><span className={`company-${c} company-badge`} style={{ display: 'inline-block', minWidth: '40px', textAlign: 'center' }}>{c.substring(0,3)}</span></div>
+                      <div style={{ fontWeight: 700, fontFamily: "'Space Mono', monospace", fontSize: "1rem", color: "#fff" }}>${gameState.stock_price[c].toLocaleString()}</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings[c]} <span style={{fontSize:"0.65rem"}}>BLD</span></div>
+                        <div style={{ fontFamily: "'Space Mono', monospace", color: "#64748b" }}>{getRemainingStocks(c)} <span style={{fontSize:"0.65rem"}}>STK</span></div>
+                      </div>
+                    </React.Fragment>
+                  ))}
+                  
+                  {gameState.variants?.includes("joker_buildings") && (
+                     <React.Fragment key="black">
+                      <div><span className={`company-black company-badge`} style={{ display: 'inline-block', minWidth: '40px', textAlign: 'center' }}>BLK</span></div>
+                      <div style={{ color: "#475569", fontSize: "0.85rem", fontStyle: "italic" }}>WILD</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["black"]} <span style={{fontSize:"0.65rem"}}>BLD</span></div>
+                      </div>
+                    </React.Fragment>
+                  )}
+                  {gameState.variants?.includes("neutral_buildings") && (
+                     <React.Fragment key="gray">
+                      <div><span className={`company-gray company-badge`} style={{ display: 'inline-block', minWidth: '40px', textAlign: 'center' }}>GRY</span></div>
+                      <div style={{ color: "#475569", fontSize: "0.85rem", fontStyle: "italic" }}>NEUT</div>
+                      <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["gray"]} <span style={{fontSize:"0.65rem"}}>BLD</span></div>
+                      </div>
+                    </React.Fragment>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="players-col">
+              <h3><Users size={20} color="var(--primary)" /> Players</h3>
+              <div className="scrollable-content">
+                {gameState.players.map((p: any) => (
+                  <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""} ${lossAnimations[p.id] ? "loss-animation" : ""}`}>
+                    <div className="player-header" style={{ marginBottom: "0.25rem" }}>
+                      <div className="player-name" style={{ display: "flex", alignItems: "center", fontSize: "1rem" }}>
+                        {p.name.substring(0, 10)}
+                        {p.is_bot && <span className="bot-tag"><Bot size={12}/></span>}
+                      </div>
+                    </div>
+                    <div className="cash-badge" style={{ marginBottom: "0.5rem", display: "inline-flex" }}>
+                      <DollarSign size={14} /> {p.cash.toLocaleString()}
+                    </div>
+                    {p.bankrupt && <div style={{ color: "#ef4444", fontWeight: 800, fontSize: "0.85rem", marginBottom: "0.5rem", letterSpacing: "0.1em" }}>BANKRUPT</div>}
+                    
+                    <div className="portfolio">
+                      {COMPANIES.map(c => (
+                        <div key={c} className={`portfolio-item ${p.stocks[c] > 0 ? 'company-'+c : ''}`} style={p.stocks[c] === 0 ? { background: '#1e293b', color: '#475569' } : {}}>
+                          {gameState.variants?.includes("open_hands") || p.id === playerId || gameState.status === "game_over" ? p.stocks[c] : "?"}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </React.Fragment>
-              ))}
-              
-              {gameState.variants?.includes("joker_buildings") && (
-                 <React.Fragment key="black">
-                  <div><span className={`company-black company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>black</span></div>
-                  <div style={{ color: "#475569", fontSize: "1rem", fontStyle: "italic" }}>WILD</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["black"]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
-                  </div>
-                </React.Fragment>
-              )}
-              {gameState.variants?.includes("neutral_buildings") && (
-                 <React.Fragment key="gray">
-                  <div><span className={`company-gray company-badge`} style={{ display: 'inline-block', minWidth: '70px', textAlign: 'center' }}>gray</span></div>
-                  <div style={{ color: "#475569", fontSize: "1rem", fontStyle: "italic" }}>NEUTRAL</div>
-                  <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                    <div style={{ fontFamily: "'Space Mono', monospace" }}>{gameState.remaining_buildings["gray"]} <span style={{fontSize:"0.65rem"}}>BLDGS</span></div>
-                  </div>
-                </React.Fragment>
-              )}
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="panel-section">
-            <h3>Players</h3>
-            {gameState.players.map((p: any) => (
-              <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""} ${lossAnimations[p.id] ? "loss-animation" : ""}`}>
-                <div className="player-header">
-                  <div className="player-name" style={{ display: "flex", alignItems: "center" }}>
-                    {p.name} 
-                    {p.is_bot && <span className="bot-tag"><Bot size={14}/> BOT</span>}
-                    {p.id === playerId ? <span style={{ color: "var(--primary)", fontSize: "0.85rem", fontWeight: 700, marginLeft: "0.75rem", textTransform: "uppercase" }}>[You]</span> : ""}
-                  </div>
-                  <div className="cash-badge">
-                    <DollarSign size={16} /> {p.cash.toLocaleString()}
-                  </div>
-                </div>
-                {p.bankrupt && <div style={{ color: "#ef4444", fontWeight: 800, fontSize: "1rem", marginBottom: "0.5rem", letterSpacing: "0.1em" }}>BANKRUPT</div>}
-                
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700, marginBottom: "0.5rem", letterSpacing: "0.05em" }}>Portfolio</div>
-                <div className="portfolio">
-                  {COMPANIES.map(c => (
-                    <div key={c} className={`portfolio-item ${p.stocks[c] > 0 ? 'company-'+c : ''}`} style={p.stocks[c] === 0 ? { background: '#1e293b', color: '#475569' } : {}}>
-                      {gameState.variants?.includes("open_hands") || p.id === playerId || gameState.status === "game_over" ? p.stocks[c] : "?"}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="panel-section" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "250px" }}>
+          <div className="logs-section">
             <h3>Activity Log</h3>
-            <div className="logs" style={{ flex: 1 }}>
+            <div className="scrollable-content logs">
               {gameState.logs.map((log: string, i: number) => (
                 <div key={i} className="log-entry">&gt; {log}</div>
               ))}
