@@ -24,9 +24,8 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
         for comp in companies_to_try:
             if game.remaining_buildings.get(comp, 0) <= 0: continue
 
-            # How much do I care about this company succeeding?
             my_shares = player.stocks.get(comp, 0)
-            comp_affinity = my_shares * 10  # Base affinity
+            comp_affinity = my_shares * 10  
 
             for r in range(12):
                 for c in range(12):
@@ -67,9 +66,7 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                                     break
 
                     if is_takeover and valid_takeover:
-                        # How much do I want to hurt the opposing companies?
                         opp_affinity = sum(player.stocks.get(chain[0].company, 0) for chain in opposing_chains)
-                        # Score = Base takeover value + my affinity for winner - my affinity for loser
                         score += 100 - (opp_affinity * 15)
                         
                         if score > best_score:
@@ -84,17 +81,16 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                                 ])
                                 
                     elif is_adj_same and not is_takeover:
-                        score += 50  # Priority: Extend chain
+                        score += 50  
                         if score > best_score:
                             best_score = score
                             best_move = (r, c, comp)
                             dramatic_action = f"📈 {player.name} strategically expands the {comp} empire."
                             
                     elif not is_adj_same and not is_takeover:
-                        score += 10  # Fallback: Lone building ($1000)
-                        # If I am broke, lone buildings are great for the instant $1000
-                        if player.cash < 2000:
-                            score += 40
+                        score += 10  
+                        if player.cash < 3000:
+                            score += 60 
                             
                         if score > best_score:
                             best_score = score
@@ -121,13 +117,60 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
         print(f"ERROR IN HEURISTICS: {e}")
         return (-1, -1, company_die)
 
+def calculate_portfolio_risk(game: Any, player: Any) -> int:
+    """
+    Calculates exactly how much cash the bot is at risk of losing next turn.
+    A company is only at risk if an enemy chain is adjacent and could potentially take it over
+    (e.g., enemy chain size is >= our chain size - 1, meaning they can place 1 building and win).
+    The loss is (buildings removed * 1000) * shares_owned.
+    """
+    total_risk = 0
+    visited_cells = set()
+    
+    for c in ["red", "blue", "green", "yellow"]:
+        if player.stocks[c] == 0: continue
+        
+        my_chains = []
+        for r in range(12):
+            for col in range(12):
+                cell = game.board[r][col]
+                if cell.company == c and (r, col) not in visited_cells:
+                    chain = game._get_chain(r, col)
+                    my_chains.append(chain)
+                    for ch_cell in chain:
+                        visited_cells.add((ch_cell.row, ch_cell.col))
+                        
+        for chain in my_chains:
+            chain_len = len(chain)
+            chain_at_risk = False
+            
+            for cell in chain:
+                adj_cells = game._get_adjacent(cell.row, cell.col, include_diagonal=False)
+                for adj in adj_cells:
+                    if adj.company and adj.company != c and adj.company != "gray" and adj.company != "black":
+                        enemy_chain = game._get_chain(adj.row, adj.col)
+                        # If the enemy places 1 building and merges with their chain, their new size is len(enemy_chain) + 1
+                        # They can takeover if (len(enemy_chain) + 1) > chain_len
+                        if len(enemy_chain) >= chain_len:
+                            chain_at_risk = True
+                            break
+                if chain_at_risk:
+                    break
+                    
+            if chain_at_risk:
+                # The stock drop is exactly the length of the removed chain * 1000
+                potential_price_drop = chain_len * 1000
+                total_risk += potential_price_drop * player.stocks[c]
+                
+    return total_risk
+
 def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
     """
     Returns (action, company, count) or None.
     Smarter Heuristics:
     1. Check wealth to see if we're winning.
     2. Defensively SELL stock to artificially extend game if losing.
-    3. Maintain a healthy cash buffer (~$4000) ONLY if there is actual risk of a hostile takeover.
+    3. Calculate EXACT total risk of hostile takeovers. Keep exactly that much cash as a buffer.
     4. Liquidate underperforming assets if we dip below our calculated risk buffer.
     5. Buy selectively based on momentum and price, up to our calculated buffer.
     """
@@ -152,44 +195,11 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
                     return "sell", c, sell_count
 
         # SURVIVAL (CASH RESERVE) LOGIC
-        # Bot calculates actual risk based on its portfolio and the board.
-        total_risk = 0
+        # Bot calculates exactly how much money it could lose on the next turn from takeovers
+        total_risk = calculate_portfolio_risk(game, player)
         
-        for c in ["red", "blue", "green", "yellow"]:
-            if player.stocks[c] == 0: continue
-            
-            # Find all chains of this company
-            my_chains = []
-            visited = set()
-            for r in range(12):
-                for c_idx in range(12):
-                    cell = game.board[r][c_idx]
-                    if cell.company == c and (r, c_idx) not in visited:
-                        chain = game._get_chain(r, c_idx)
-                        for ch_cell in chain:
-                            visited.add((ch_cell.row, ch_cell.col))
-                        my_chains.append(chain)
-                        
-            # Analyze each chain for adjacent enemy presence
-            for chain in my_chains:
-                is_chain_at_risk = False
-                for cell in chain:
-                    # Check if an enemy is directly adjacent, meaning a takeover could happen
-                    adj_cells = game._get_adjacent(cell.row, cell.col, include_diagonal=False)
-                    for adj in adj_cells:
-                        if adj.company and adj.company != c and adj.company != "gray":
-                            is_chain_at_risk = True
-                            break
-                    if is_chain_at_risk:
-                        break
-                        
-                if is_chain_at_risk:
-                    # If the chain is at risk, we need cash to survive a potential drop
-                    # The absolute worst case is the entire company stock price zeroes out
-                    total_risk += game.stock_price[c] * player.stocks[c]
-
-        # Don't hold more than 4000 in reserve even if risk is high, to avoid total paralysis
-        SAFE_CASH_BUFFER = min(4000, total_risk)
+        # Don't hoard millions if the board is a bloodbath, cap reserve at a reasonable high amount
+        SAFE_CASH_BUFFER = min(15000, total_risk)
         
         if player.cash < SAFE_CASH_BUFFER:
             # Need to build up a cash reserve to prevent bankruptcy
@@ -201,18 +211,17 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
                 target_comp, price, _ = owned[0]
                 
                 needed_cash = SAFE_CASH_BUFFER - player.cash
-                shares_to_sell = min(player.stocks[target_comp], 3, (needed_cash // price) + 1)
+                shares_to_sell = min(player.stocks[target_comp], 5, (needed_cash // price) + 1)
                 
                 if shares_to_sell > 0:
                     drama = [
                         f"📉 {player.name} liquidates {shares_to_sell} shares of {target_comp} to build a safety buffer.",
-                        f"🏦 Assessing market risk, {player.name} sells off {target_comp} stock to shore up cash reserves."
+                        f"🏦 Assessing {SAFE_CASH_BUFFER} market risk, {player.name} sells off {target_comp} stock to shore up cash."
                     ]
                     game.log(random.choice(drama))
                     return "sell", target_comp, shares_to_sell
-
-        # REGULAR BUYING LOGIC
-        # Only buy if we have more cash than our safe buffer (or if buffer is 0, spend down to 0)
+                    
+        # If we have no risk, or we just built our buffer, buy!
         if player.cash > SAFE_CASH_BUFFER or (player.cash >= 1000 and SAFE_CASH_BUFFER == 0):
             available_cash_to_spend = player.cash - SAFE_CASH_BUFFER
             
