@@ -314,7 +314,24 @@ function App() {
       </header>
 
       <div className="main-content">
-        <div className="board-container">
+        <div className="board-container" style={{ display: 'flex', flexDirection: 'column' }}>
+          {gameState.phase === "expand" && gameState.current_company_die && (
+            <div className="dice-overlay">
+              <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                <div className="dice-label">Company</div>
+                <div className={`die company-${gameState.current_company_die}`} title={`Company Rolled: ${gameState.current_company_die}`}>
+                  {['black', 'gray'].includes(gameState.current_company_die) ? gameState.current_company_die[0].toUpperCase() : ""}
+                </div>
+              </div>
+              <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                <div className="dice-label">Area</div>
+                <div className={`die die-area ${gameState.current_area_die === "SHARK" ? "shark-face" : ""}`} title={`Area Rolled: ${gameState.current_area_die}`}>
+                  {gameState.current_area_die !== "SHARK" ? gameState.current_area_die : ""}
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="board">
             {gameState.board.map((row: any[], r: number) =>
               row.map((cell: any, c: number) => (
@@ -593,7 +610,7 @@ function App() {
             ))}
           </div>
 
-          <div className="panel-section" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          <div className="panel-section" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "250px" }}>
             <h3>Activity Log</h3>
             <div className="logs" style={{ flex: 1 }}>
               {gameState.logs.map((log: string, i: number) => (
