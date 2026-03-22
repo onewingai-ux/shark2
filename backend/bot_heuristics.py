@@ -130,9 +130,9 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
     3. Diversify (don't buy > 10 of one stock unless it's doing incredibly well).
     4. Sell stocks if they're high and we need cash for other things, or if we're broke.
     5. Don't buy enough stock to end the game UNLESS we are currently mathematically winning.
+    6. Defensively SELL stock of a company that is dangerously close to running out in the bank if we are losing, to artificially extend the game.
     """
     try:
-        # Check current wealth to see if we're winning
         my_wealth = player.cash + sum(player.stocks[c] * game.stock_price[c] for c in ["red", "blue", "green", "yellow"])
         max_opp_wealth = 0
         for p in game.players:
@@ -144,6 +144,18 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
 
         momentum = {c: 18 - game.remaining_buildings[c] for c in ["red", "blue", "green", "yellow"]}
         
+        # DEFENSIVE SELLING LOGIC (To prevent other players from ending the game)
+        if not i_am_winning:
+            for c in ["red", "blue", "green", "yellow"]:
+                avail_shares = game.total_stocks[c] - sum(p.stocks[c] for p in game.players)
+                # If there are only 1 or 2 shares left in the bank, the next player might just buy them and win.
+                # Sell 2 shares (or as many as we have) to flood the market and buy time!
+                if avail_shares <= 2 and player.stocks[c] > 0 and game.stock_price[c] >= 1000:
+                    sell_count = min(2, player.stocks[c])
+                    game.log(f"🛡️ {player.name} aggressively shorts {c} to flood the market and prevent an early buyout!")
+                    return "sell", c, sell_count
+
+        # REGULAR BUYING LOGIC
         if player.cash >= 1500:
             buy_candidates = []
             for c in ["red", "blue", "green", "yellow"]:
@@ -185,7 +197,7 @@ def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
                         game.log(random.choice(drama))
                         return "buy", target_comp, count
                     
-        # Selling Logic
+        # REGULAR SELLING LOGIC
         if player.cash < 2000:
             owned = [(c, game.stock_price[c]) for c in ["red", "blue", "green", "yellow"] 
                      if player.stocks[c] > 0 and game.stock_price[c] >= 1000]
