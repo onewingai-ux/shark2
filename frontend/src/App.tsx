@@ -309,8 +309,17 @@ function App() {
   return (
     <div className="container">
       <header>
-        <h2>🦈 SHARK <span style={{ color: "var(--text-muted)", fontSize: "1rem", fontFamily: "'Space Mono', monospace", fontWeight: 400 }}>Room: {gameState.room_id}</span></h2>
-        <div className="player-tag">{playerName}</div>
+        <div className="header-left">
+          <h2 style={{margin:0}}>🦈 SHARK</h2>
+          <div className="header-divider"></div>
+          <div className="room-badge">
+            Room Code: <strong>{gameState.room_id}</strong>
+          </div>
+        </div>
+        <div className="header-right">
+        
+        <div className="player-tag" title="Your Username">👤 {playerName}</div>
+        </div>
       </header>
 
       <div className="main-content">
