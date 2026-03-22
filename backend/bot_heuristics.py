@@ -4,38 +4,39 @@ from typing import List, Tuple, Dict, Any
 def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: str) -> Tuple[int, int, str]:
     """
     Returns the best (row, col, chosen_company) for a bot to expand.
-    Heuristics in priority order:
-    1. Hostile takeover (highest priority)
-    2. Extend an existing chain (boosts stock price)
-    3. Create a lone building (instant $1000 bonus)
+    Heuristics are now portfolio-aware:
+    1. Highest priority: Take over a company I don't own much of, using a company I DO own a lot of.
+    2. Extend a chain of a company I own stock in.
+    3. Create a lone building for a company I own stock in (or just to get $1000 cash).
     """
     try:
         companies_to_try = [company_die]
         
-        # When gray, place a normal piece if neutral variant is active (avoids complexity of managing gray barriers)
         if company_die in ["black", "gray"]:
             companies_to_try = [c for c in ["red", "blue", "green", "yellow"] if game.remaining_buildings[c] > 0]
             if not companies_to_try:
                 return -1, -1, company_die
             
         best_move = None
-        best_score = -1
+        best_score = -1000
         dramatic_action = ""
 
         for comp in companies_to_try:
             if game.remaining_buildings.get(comp, 0) <= 0: continue
+
+            # How much do I care about this company succeeding?
+            my_shares = player.stocks.get(comp, 0)
+            comp_affinity = my_shares * 10  # Base affinity
 
             for r in range(12):
                 for c in range(12):
                     cell = game.board[r][c]
                     if cell.company is not None: continue
                     
-                    # Check area match
                     if area_die == "SHARK" and cell.area != "SHARK": continue
                     if area_die != "SHARK" and cell.area != area_die: continue
 
-                    # Evaluate move score based on adjacency
-                    score = 0
+                    score = comp_affinity
                     adj_cells = game._get_adjacent(r, c, include_diagonal=False)
                     
                     is_adj_same = False
@@ -50,9 +51,8 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                                 opposing_chains.append(opp_chain)
 
                     is_takeover = len(opposing_chains) > 0
-
-                    # Validate takeover
                     valid_takeover = False
+                    
                     if is_takeover:
                         if is_adj_same:
                             temp_chain_len = 1
@@ -66,39 +66,45 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                                     valid_takeover = False
                                     break
 
-                    # Score the move
                     if is_takeover and valid_takeover:
-                        score = 100 # Highest priority: Takeover
-                        possible_drama = [
-                            f"🚨 {player.name} launches a ruthless hostile takeover of the market!",
-                            f"💥 {player.name} aggressively crushes the competition in area {area_die}!",
-                            f"🦈 {player.name} smells blood and initiates a devastating buyout!"
-                        ]
-                        current_drama = random.choice(possible_drama)
-                    elif is_adj_same and not is_takeover:
-                        score = 50  # Priority: Extend chain
-                        possible_drama = [
-                            f"📈 {player.name} strategically expands their corporate empire.",
-                            f"🏢 {player.name} builds another skyscraper, driving up stock prices!"
-                        ]
-                        current_drama = random.choice(possible_drama)
-                    elif not is_adj_same and not is_takeover:
-                        score = 10  # Fallback: Lone building ($1000)
-                        current_drama = f"🏗️ {player.name} establishes a new beachhead for {comp}."
-                    else:
-                        continue # Invalid move
-
-                    if score > best_score:
-                        best_score = score
-                        best_move = (r, c, comp)
-                        dramatic_action = current_drama
+                        # How much do I want to hurt the opposing companies?
+                        opp_affinity = sum(player.stocks.get(chain[0].company, 0) for chain in opposing_chains)
+                        # Score = Base takeover value + my affinity for winner - my affinity for loser
+                        score += 100 - (opp_affinity * 15)
                         
-        # Log the drama
+                        if score > best_score:
+                            best_score = score
+                            best_move = (r, c, comp)
+                            if opp_affinity > 0:
+                                dramatic_action = f"😬 {player.name} ruthlessly cannibalizes their own investments in a hostile takeover!"
+                            else:
+                                dramatic_action = random.choice([
+                                    f"🚨 {player.name} launches a devastating hostile takeover for {comp}!",
+                                    f"💥 {player.name} aggressively crushes the competition in area {area_die}!"
+                                ])
+                                
+                    elif is_adj_same and not is_takeover:
+                        score += 50  # Priority: Extend chain
+                        if score > best_score:
+                            best_score = score
+                            best_move = (r, c, comp)
+                            dramatic_action = f"📈 {player.name} strategically expands the {comp} empire."
+                            
+                    elif not is_adj_same and not is_takeover:
+                        score += 10  # Fallback: Lone building ($1000)
+                        # If I am broke, lone buildings are great for the instant $1000
+                        if player.cash < 2000:
+                            score += 40
+                            
+                        if score > best_score:
+                            best_score = score
+                            best_move = (r, c, comp)
+                            dramatic_action = f"🏗️ {player.name} establishes a new beachhead for {comp}."
+
         if best_move and dramatic_action:
             game.log(dramatic_action)
             return best_move
             
-        # Fallback to mathematically valid spot without heuristics
         if not best_move:
             for comp in companies_to_try:
                 for r in range(12):
@@ -107,7 +113,7 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
                         if cell.company is None and (area_die == "SHARK" and cell.area == "SHARK" or area_die != "SHARK" and cell.area == area_die):
                             success, _ = game.expand(player.id, r, c, comp)
                             if success:
-                                game.log(f"🤷 {player.name} forced to make a mediocre placement.")
+                                game.log(f"🤷 {player.name} found no strategic options and made a mediocre placement.")
                                 return r, c, comp
                                 
         return (-1, -1, company_die)
@@ -116,34 +122,76 @@ def get_best_expansion_move(game: Any, player: Any, company_die: str, area_die: 
         return (-1, -1, company_die)
 
 def get_best_trade(game: Any, player: Any) -> Tuple[str, str, int]:
+    """
+    Returns (action, company, count) or None.
+    Smarter Heuristics:
+    1. Don't blindly buy $0 stocks unless we're about to build them.
+    2. Try to buy stocks of companies that have buildings on the board (momentum).
+    3. Diversify (don't buy > 10 of one stock unless it's doing incredibly well).
+    4. Sell stocks if they're high and we need cash for other things, or if we're broke.
+    """
     try:
-        if player.cash >= 2000:
-            available = [c for c in ["red", "blue", "green", "yellow"] 
-                         if 1000 <= game.stock_price[c] <= player.cash 
-                         and sum(p.stocks[c] for p in game.players) < game.total_stocks[c]]
-                         
-            if available:
-                available.sort(key=lambda c: game.stock_price[c])
-                target_comp = available[0]
+        # Evaluate company momentum (buildings on board)
+        momentum = {c: 18 - game.remaining_buildings[c] for c in ["red", "blue", "green", "yellow"]}
+        
+        if player.cash >= 1500:
+            # Find a good stock to buy
+            buy_candidates = []
+            for c in ["red", "blue", "green", "yellow"]:
+                price = game.stock_price[c]
+                my_shares = player.stocks[c]
+                avail_shares = game.total_stocks[c] - sum(p.stocks[c] for p in game.players)
                 
-                max_can_buy = min(5, player.cash // game.stock_price[target_comp])
-                max_avail = game.total_stocks[target_comp] - sum(p.stocks[target_comp] for p in game.players)
-                count = min(max_can_buy, max_avail)
+                # Only buy if it's legally tradable
+                if price >= 1000 and avail_shares > 0:
+                    # Don't hoard too much of a single mediocre stock
+                    if my_shares > 12 and price < 5000:
+                        continue
+                        
+                    # Calculate a "desirability" score:
+                    # High momentum is good, low price is good (buy low). 
+                    score = momentum[c] * 500 - price
+                    buy_candidates.append((score, c, price, avail_shares))
+            
+            if buy_candidates:
+                # Sort by highest score
+                buy_candidates.sort(key=lambda x: x[0], reverse=True)
+                _, target_comp, price, avail_shares = buy_candidates[0]
+                
+                # Buy up to 3 at a time (instead of maxing out 5) to save cash and not rush the game
+                remaining_buys_this_turn = max(0, 5 - game.current_turn_purchases)
+                affordable_count = player.cash // price
+                
+                count = min(3, affordable_count, avail_shares, remaining_buys_this_turn)
                 
                 if count > 0:
                     drama = [
                         f"💰 {player.name} aggressively accumulates {count} shares of {target_comp}!",
-                        f"💹 Wall Street takes notice as {player.name} buys up {target_comp} stock."
+                        f"💹 {player.name} sees momentum in {target_comp} and buys {count} shares."
                     ]
                     game.log(random.choice(drama))
                     return "buy", target_comp, count
                     
-        elif player.cash < 1000:
-            owned = [c for c in ["red", "blue", "green", "yellow"] if player.stocks[c] > 0 and game.stock_price[c] >= 1000]
+        # Selling Logic
+        if player.cash < 2000:
+            # Need cash! Sell the highest priced stock we own to get the most runway
+            owned = [(c, game.stock_price[c]) for c in ["red", "blue", "green", "yellow"] 
+                     if player.stocks[c] > 0 and game.stock_price[c] >= 1000]
             if owned:
-                owned.sort(key=lambda c: game.stock_price[c], reverse=True)
-                game.log(f"📉 Desperate times! {player.name} is forced to liquidate {owned[0]} assets to stay afloat.")
-                return "sell", owned[0], 1
+                owned.sort(key=lambda x: x[1], reverse=True) # Highest price first
+                target_comp, price = owned[0]
+                
+                game.log(f"📉 {player.name} liquidates 1 share of {target_comp} to free up capital.")
+                return "sell", target_comp, 1
+                
+        else:
+            # We have cash, but maybe we should take profits if a stock is super high (> $8000) and we own a lot
+            owned_high = [(c, game.stock_price[c]) for c in ["red", "blue", "green", "yellow"] 
+                     if player.stocks[c] >= 5 and game.stock_price[c] >= 8000]
+            if owned_high and random.random() > 0.7:
+                target_comp, price = owned_high[0]
+                game.log(f"🤑 {player.name} takes profits on {target_comp}, selling 2 shares at high valuation.")
+                return "sell", target_comp, min(2, player.stocks[target_comp])
                 
         return None, None, 0
     except Exception as e:
