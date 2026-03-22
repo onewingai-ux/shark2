@@ -638,3 +638,44 @@ select, option {
 .panel-section {
   flex: none; /* Make sure flex doesn't cause unexpected stretching */
 }
+/* Fix Layout to Keep Board ALWAYS In Frame */
+body, html {
+  height: 100%;
+  overflow: hidden; /* Prevent full-page scrolling */
+}
+
+.container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  gap: 2rem;
+  padding: 1.5rem;
+  overflow: hidden; /* Contains the children */
+}
+
+.board-container {
+  flex: 1.5;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.board {
+  max-height: 100%;
+  aspect-ratio: 1; /* Keep square */
+  width: auto;
+  max-width: 100%;
+}
+
+.side-panel {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto; /* Only sidebar scrolls */
+  padding-right: 1rem;
+}
