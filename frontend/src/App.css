@@ -995,3 +995,24 @@ input[type="number"], .trade-controls input {
     border-right: none;
   }
 }
+/* Lock mobile board size permanently */
+@media (max-width: 900px) {
+  .board-container {
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    /* The board itself dictates the container height on mobile */
+    padding: 1rem !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+  }
+  
+  .board {
+    width: 100vw !important;
+    max-width: 500px !important;
+    height: auto !important;
+    aspect-ratio: 1 !important;
+    margin: 0 auto !important;
+  }
+}
