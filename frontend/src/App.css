@@ -915,3 +915,83 @@ button:disabled {
     max-height: 100vw;
   }
 }
+/* Force Input Color Fixes */
+input[type="number"], .trade-controls input {
+  color: #0f172a !important;
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+}
+/* Mobile Tabs Navigation */
+.mobile-tabs {
+  display: none;
+  width: 100%;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.mobile-tab-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 0.75rem 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mobile-tab-btn:hover {
+  background: rgba(255,255,255,0.05);
+  box-shadow: none;
+  transform: none;
+}
+
+.mobile-tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: rgba(217, 119, 6, 0.05);
+}
+
+/* Ensure mobile layout handles tabs properly */
+@media (max-width: 900px) {
+  .mobile-tabs {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  
+  .side-panel {
+    gap: 0;
+  }
+  
+  /* Hide sections by default on mobile, let React handle it via class or conditional render */
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  .info-split {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .action-section, .logs-section {
+    padding: 1rem;
+  }
+  
+  .board-container {
+    padding: 1rem;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
