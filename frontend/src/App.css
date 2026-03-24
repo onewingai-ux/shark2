@@ -340,6 +340,21 @@ header h2 {
   color: #fff;
 }
 
+/* Collapsed Sections */
+.market-col.collapsed > .scrollable-content,
+.players-col.collapsed > .scrollable-content,
+.logs-section.collapsed > .scrollable-content {
+  display: none;
+}
+
+/* Collapsed sections maintain header visibility but reduce min-height */
+.market-col.collapsed,
+.players-col.collapsed,
+.logs-section.collapsed {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
 /* Explicit Select Rules */
 select, option {
   color: #0f172a !important;

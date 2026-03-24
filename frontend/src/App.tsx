@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AlertCircle, Play, DollarSign, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle, Settings, HelpCircle, X, Activity, Users, FileText } from "lucide-react";
+import { AlertCircle, Play, DollarSign, Info, ArrowRightCircle, RefreshCcw, Bot, ArrowUpCircle, ArrowDownCircle, Settings, HelpCircle, X, Activity, Users, FileText, ChevronDown } from "lucide-react";
 import "./App.css";
 
 const COMPANIES = ["red", "blue", "green", "yellow"];
@@ -24,6 +24,11 @@ function App() {
   
   const [activeMobileTab, setActiveMobileTab] = useState("controls"); // controls, market, players, logs
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 900);
+  
+  // Collapsible sections state
+  const [collapsedMarket, setCollapsedMarket] = useState(false);
+  const [collapsedPlayers, setCollapsedPlayers] = useState(false);
+  const [collapsedLogs, setCollapsedLogs] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -563,8 +568,11 @@ function App() {
           </div>
 
           <div className={`info-split ${isTabVisible('market') || isTabVisible('players') ? '' : 'mobile-hidden'}`}>
-            <div className={`market-col ${isTabVisible('market') ? '' : 'mobile-hidden'}`}>
-              <h3><Activity size={20} color="var(--primary)" /> Market</h3>
+            <div className={`market-col ${isTabVisible('market') ? '' : 'mobile-hidden'} ${collapsedMarket ? 'collapsed' : ''}`}>
+              <h3 onClick={() => setCollapsedMarket(!collapsedMarket)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Activity size={20} color="var(--primary)" /> Market</span>
+                <ChevronDown size={18} style={{ transform: collapsedMarket ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+              </h3>
               <div className="scrollable-content">
                 <div className="market-grid">
                   <div className="market-header">Comp</div>
@@ -604,8 +612,11 @@ function App() {
               </div>
             </div>
 
-            <div className={`players-col ${isTabVisible('players') ? '' : 'mobile-hidden'}`}>
-              <h3><Users size={20} color="var(--primary)" /> Players</h3>
+            <div className={`players-col ${isTabVisible('players') ? '' : 'mobile-hidden'} ${collapsedPlayers ? 'collapsed' : ''}`}>
+              <h3 onClick={() => setCollapsedPlayers(!collapsedPlayers)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Users size={20} color="var(--primary)" /> Players</span>
+                <ChevronDown size={18} style={{ transform: collapsedPlayers ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+              </h3>
               <div className="scrollable-content">
                 {gameState.players.map((p: any) => (
                   <div key={p.id} className={`player-card ${p.id === gameState.current_player ? "active-turn" : ""} ${lossAnimations[p.id] ? "loss-animation" : ""}`}>
@@ -633,8 +644,11 @@ function App() {
             </div>
           </div>
 
-          <div className={`logs-section ${isTabVisible('logs') ? '' : 'mobile-hidden'}`}>
-            <h3>Activity Log</h3>
+          <div className={`logs-section ${isTabVisible('logs') ? '' : 'mobile-hidden'} ${collapsedLogs ? 'collapsed' : ''}`}>
+            <h3 onClick={() => setCollapsedLogs(!collapsedLogs)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Activity Log</span>
+              <ChevronDown size={18} style={{ transform: collapsedLogs ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+            </h3>
             <div className="scrollable-content logs">
               {gameState.logs.map((log: string, i: number) => (
                 <div key={i} className="log-entry">&gt; {log}</div>
