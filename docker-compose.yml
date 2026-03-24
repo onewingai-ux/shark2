@@ -3,23 +3,14 @@ version: "3.8"
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backend/Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
-      - ./backend:/app
+      - ./backend/main.py:/app/main.py
+      - ./backend/bot_heuristics.py:/app/bot_heuristics.py
+      - ./backend/game.py:/app/game.py
+      - ./frontend/dist:/app/dist
     environment:
       - PYTHONUNBUFFERED=1
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
