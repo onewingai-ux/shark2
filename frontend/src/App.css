@@ -636,8 +636,9 @@ button:disabled {
 
 /* OVERLAY DICE FIX */
 .dice-overlay {
-  position: absolute;
-  top: 1rem;
+  position: fixed;
+  top: 100px;
+  right: 20px;
   z-index: 50;
   display: flex;
   gap: 1.5rem;
